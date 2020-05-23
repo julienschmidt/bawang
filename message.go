@@ -1,5 +1,6 @@
 package main
 
+//nolint:deadcode,unused,varcheck
 const (
 	msgTypeGossipAnnounce     = 500
 	msgTypeGossipNotify       = 501
