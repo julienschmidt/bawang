@@ -14,8 +14,8 @@ var (
 	config Config
 )
 
-func handleConnection(c net.Conn) {
-	reader := bufio.NewReader(c)
+func handleConnection(conn net.Conn) {
+	reader := bufio.NewReader(conn)
 	for {
 		// try and read the packet header
 		var buf = make([]byte, 4)
@@ -45,7 +45,7 @@ func handleConnection(c net.Conn) {
 	c.Close()
 }
 
-func openApiSocket() {
+func openAPISocket() {
 	ln, err := net.Listen("tcp", config.OnionAPIAddress)
 
 	if err != nil {
@@ -75,7 +75,5 @@ func main() {
 
 	config.FromFile(configFilePath)
 
-	openApiSocket()
-
-	println("Ik bin ne Swibel!")
+	openAPISocket()
 }
