@@ -42,7 +42,7 @@ func handleConnection(conn net.Conn) {
 		// switch (messageType) do something with packet
 	}
 
-	c.Close()
+	conn.Close()
 }
 
 func openAPISocket() {
