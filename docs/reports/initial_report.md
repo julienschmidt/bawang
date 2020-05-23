@@ -11,13 +11,13 @@ We might have further experience from our work at StuStaNet e. V., open source p
 ## Implementation
 
 As the programming language, we have chosen Go 1.14, as it comes with most batteries included for network programming and offers good performance while also taking care of memory management and provides type-safety.
-Go further allows us to easily support (almost) all platforms supported by the Go toolchain (`$(go tool dist list)`), however we are only going to test on Linux and macOS, as those are our development platforms.
+Go further allows us to easily support (almost) all platforms supported by the Go toolchain (`$ go tool dist list`), however we are only going to test on Linux and macOS, as those are our development platforms.
 We are also going to rely mostly on the standard Go toolchain as our build system, as there is little reason to use anything more complicated.
 
 
 ## Software Quality Guarantee Measures
 
-To ensure the excellent quality of our software, we are going to use Go unit tests (`go test`). We intend to use the [Testify framework](https://github.com/stretchr/testify) to make writing tests a little less cumbersome.
+To ensure the excellent quality of our software, we are going to use Go unit tests (`go test`), using e.g. mocking and table-driven tests. We intend to use the [Testify framework](https://github.com/stretchr/testify) to make writing tests a little less cumbersome.
 
 We are further planning to set up continuous integration in Gitlab, including an integration test with the [`voidphone_testing`](https://gitlab.lrz.de/netintum/teaching/voidphone_testing) dummy implementation, as well as code analysis with `gofmt` (code formatting) and [`golangci-lint`](https://github.com/golangci/golangci-lint), which is a meta linter allowing us to easily test against many Go linters and static code analyzers.
 
