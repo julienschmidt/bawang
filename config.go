@@ -2,17 +2,16 @@ package main
 
 import (
 	"fmt"
+	"github.com/go-ini/ini"
 	"io/ioutil"
 	"os"
-
-	"github.com/go-ini/ini"
 )
 
 type Config struct {
-	P2pHostname     string
-	P2pPort         int
-	RpsApiAddress   string // api socket address of the RPS module
-	OnionApiAddress string
+	P2PHostname     string
+	P2PPort         int
+	RPSAPIAddress   string // api socket address of the RPS module
+	OnionAPIAddress string
 	HostKey         string
 	BuildTimeout    int
 	CreateTimeout   int
@@ -26,10 +25,10 @@ func (c *Config) FromFile(path string) {
 		os.Exit(1)
 	}
 
-	c.RpsApiAddress = cfg.Section("rps").Key("api_address").String()
-	c.OnionApiAddress = cfg.Section("onion").Key("api_address").String()
-	c.P2pHostname = cfg.Section("onion").Key("p2p_hostname").String()
-	c.P2pPort = cfg.Section("onion").Key("p2p_port").MustInt()
+	c.RPSAPIAddress = cfg.Section("rps").Key("api_address").String()
+	c.OnionAPIAddress = cfg.Section("onion").Key("api_address").String()
+	c.P2PHostname = cfg.Section("onion").Key("p2p_hostname").String()
+	c.P2PPort = cfg.Section("onion").Key("p2p_port").MustInt()
 	c.BuildTimeout = cfg.Section("onion").Key("build_timeout").MustInt(10)
 	c.CreateTimeout = cfg.Section("onion").Key("create_timeout").MustInt(10)
 	c.Verbosity = cfg.Section("onion").Key("verbose").MustInt(0)
@@ -46,22 +45,12 @@ func (c *Config) FromFile(path string) {
 	}
 	c.HostKey = string(data)
 
-	if c.RpsApiAddress == "" {
-		fmt.Println("Missing config file entry: [rps] api_address")
-		os.Exit(1)
-	}
-
-	if c.OnionApiAddress == "" {
-		fmt.Println("Missing config file entry: [onion] api_address")
-		os.Exit(1)
-	}
-
-	if c.P2pHostname == "" {
+	if c.P2PHostname == "" {
 		fmt.Println("Missing config file entry: [onion] p2p_hostname")
 		os.Exit(1)
 	}
 
-	if c.P2pPort == 0 {
+	if c.P2PPort == 0 {
 		fmt.Println("Missing config file entry: [onion] p2p_port")
 		os.Exit(1)
 	}
