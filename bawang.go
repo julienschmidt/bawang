@@ -18,7 +18,7 @@ func handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
 		// try and read the packet header
-		var buf = make([]byte, 4)
+		buf := make([]byte, 4)
 		n, err := io.ReadFull(reader, buf)
 
 		if err != nil || n != 4 {
@@ -29,7 +29,7 @@ func handleConnection(conn net.Conn) {
 		size := binary.BigEndian.Uint16(buf[:2])
 		//messageType := binary.BigEndian.Uint16(buf[2:])
 		// TODO: sanity checks for package size
-		var packet = make([]byte, size)
+		packet := make([]byte, size)
 
 		n, err = io.ReadFull(reader, packet)
 		if err != nil || n != int(size) {
@@ -73,7 +73,11 @@ func main() {
 	var configFilePath string
 	flag.StringVar(&configFilePath, "config", "config.ini", "Path to config file, default is config.ini")
 
-	config.FromFile(configFilePath)
+	err := config.FromFile(configFilePath)
+	if err != nil {
+		fmt.Printf("Error when loading config file: %v", err)
+		os.Exit(1)
+	}
 
 	openAPISocket()
 }
