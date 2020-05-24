@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
 	"io"
 	"log"
 	"net"
@@ -11,30 +10,70 @@ import (
 func handleAPIConnection(conn net.Conn) {
 	defer conn.Close()
 
-	reader := bufio.NewReader(conn)
+	var msgBuf [msgMaxSize]byte
+	rd := bufio.NewReader(conn)
+
 	for {
-		// try and read the packet header
-		buf := make([]byte, 4)
-		n, err := io.ReadFull(reader, buf)
-		if err != nil || n != 4 {
-			log.Printf("Error reading packet header: %v", err)
-			break
+		// read the message header
+		hdr, err := readMsgHeader(rd)
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+			log.Printf("Error reading message header: %v", err)
+			return
 		}
 
-		size := binary.BigEndian.Uint16(buf[:2])
-		//messageType := binary.BigEndian.Uint16(buf[2:])
-		// TODO: sanity checks for package size
-		packet := make([]byte, size)
-
-		n, err = io.ReadFull(reader, packet)
-		if err != nil || n != int(size) {
-			log.Printf("Error reading main packet: %v", err)
-			break
+		// ready message body
+		data := msgBuf[:hdr.Size]
+		_, err = io.ReadFull(rd, data)
+		if err != nil {
+			log.Printf("Error reading message body: %v", err)
+			return
 		}
 
-		// TODO: call packet processing function
-		// something like
-		// switch (messageType) do something with packet
+		// handle message
+		switch hdr.Type {
+		case msgTypeOnionTunnelBuild:
+			var msg msgOnionTunnelBuild
+			err := msg.Parse(data)
+			if err != nil {
+				log.Printf("Error parsing message body: %v", err)
+				continue
+			}
+			// TODO: some action
+			log.Println("Onion Tunnel Build")
+
+		case msgTypeOnionTunnelDestroy:
+			var msg msgOnionTunnelDestroy
+			err := msg.Parse(data)
+			if err != nil {
+				log.Printf("Error parsing message body: %v", err)
+				continue
+			}
+			// TODO: some action
+			log.Println("Onion Tunnel Destroy")
+
+		case msgTypeOnionTunnelData:
+			var msg msgOnionTunnelData
+			err := msg.Parse(data)
+			if err != nil {
+				log.Printf("Error parsing message body: %v", err)
+				continue
+			}
+			// TODO: some action
+			log.Println("Onion Tunnel Data")
+
+		case msgTypeOnionCover:
+			var msg msgOnionCover
+			err := msg.Parse(data)
+			if err != nil {
+				log.Printf("Error parsing message body: %v", err)
+				continue
+			}
+			// TODO: some action
+			log.Println("Onion Tunnel Cover")
+		}
 	}
 }
 
@@ -49,10 +88,10 @@ func listenAPISocket(cfg *Config) error {
 		conn, err := ln.Accept()
 		if err != nil {
 			// TODO: error on client connection
-			log.Println("Error when accepting client connection")
+			log.Println("Error accepting client connection")
 			continue
 		}
-		log.Println("Received connection")
+		log.Println("Received new connection")
 
 		go handleAPIConnection(conn)
 	}

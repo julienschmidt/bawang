@@ -69,7 +69,10 @@ var (
 	errBufferTooSmall = errors.New("buffer is too small for message")
 )
 
-const msgHeaderSize = 2 + 2
+const (
+	msgMaxSize    = 2<<15 - 1
+	msgHeaderSize = 2 + 2
+)
 
 type msgHeader struct {
 	Size uint16
@@ -78,7 +81,7 @@ type msgHeader struct {
 
 func readMsgHeader(rd io.Reader) (hdr msgHeader, err error) {
 	var header [msgHeaderSize]byte
-	_, err = rd.Read(header[:])
+	_, err = io.ReadFull(rd, header[:])
 	if err != nil {
 		return
 	}
