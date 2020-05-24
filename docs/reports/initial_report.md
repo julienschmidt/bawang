@@ -10,7 +10,7 @@ We might have further relevant experience from our work at StuStaNet e. V., open
 
 ## Implementation
 
-As the programming language, we have chosen Go 1.14, as it comes with most batteries included for network programming and offers good performance while also taking care of memory management and provides type-safety. Go also provides excellent native support for concurrency in the form of so-called goroutines (green threads), which make it unnecessary to e.g. set up an event loop (and making sure that noting blocks it) and tracking the state for async execution.
+As the programming language, we have chosen Go 1.14, as it comes with most batteries included for network programming and offers good performance while also taking care of memory management and provides type-safety. Go also provides excellent native support for concurrency in the form of so-called goroutines (green threads), which make it unnecessary to e.g. set up an event loop (and making sure that nothing blocks it) and tracking the state for async execution.
 
 Go further allows us to easily support (almost) all platforms supported by the Go toolchain (`$ go tool dist list`), however we are only going to test on Linux and macOS, as those are our development platforms.
 We are also going to rely mostly on the standard Go toolchain as our build system, as there is little reason to use anything more complicated.
