@@ -4,6 +4,7 @@ set -e
 # run unit tests and measure coverage
 echo "running unit tests..."
 go test -v -cover -covermode=count
+# go test -v -race -cover -covermode=atomic
 
 # gofmt check
 echo "checking formatting..."
