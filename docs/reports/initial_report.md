@@ -26,7 +26,8 @@ We are further planning to set up continuous integration in Gitlab, including an
 ## Workflow
 
 We intend to work in close collaboration on the implementation and do not intend to make a clear separation of responsibilities, as we are both eager to work on all parts of the project and want to review each other's code. We will coordinate with each other to work on different details of the implementation at a time.
-As we are also only two people working on the code, we **do not** intend to use a branch-based git workflow. Instead we plan to follow a flat-history approach, where will rebase our local clone often on the `origin/master`, which is also when we will **review any intermediate changes**. As we intend to mostly work on the project at the same time and while being at the same location, coordination and feedback is easily possible via verbal communication.
+As we are also only two people working on the code, we **do not** intend to use a branch-based git workflow. Instead we plan to follow a flat-history approach, where we will rebase our local clones often on the `origin/master`, which is also when we will **review any intermediate changes**. As we intend to mostly work on the project at the same time and while being at the same location, coordination and feedback is easily possible via verbal communication.
+
 The `origin/master` should not be broken at any time. If the CI has any complaints, those should be addressed immediately (except for yet unimplemented features).
 
 
