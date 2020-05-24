@@ -92,6 +92,7 @@ type message interface {
 	Type() msgType
 	Parse(data []byte) error
 	Pack(buf []byte) (n int, err error)
+	PackedSize() (n int)
 }
 
 const flagIPv6 = 0b10000000
@@ -138,13 +139,17 @@ func (msg *msgOnionTunnelBuild) Parse(data []byte) (err error) {
 	return
 }
 
-func (msg *msgOnionTunnelBuild) Pack(buf []byte) (n int, err error) {
+func (msg *msgOnionTunnelBuild) PackedSize() (n int) {
 	n = 1 + 1 + 2 + 4
 	if msg.ipv6 {
 		n += 12
 	}
 	n += len(msg.destHostKey)
+	return
+}
 
+func (msg *msgOnionTunnelBuild) Pack(buf []byte) (n int, err error) {
+	n = msg.PackedSize()
 	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
@@ -197,8 +202,13 @@ func (msg *msgOnionTunnelReady) Parse(data []byte) (err error) {
 	return
 }
 
-func (msg *msgOnionTunnelReady) Pack(buf []byte) (n int, err error) {
+func (msg *msgOnionTunnelReady) PackedSize() (n int) {
 	n = 4 + len(msg.destHostKey)
+	return
+}
+
+func (msg *msgOnionTunnelReady) Pack(buf []byte) (n int, err error) {
+	n = msg.PackedSize()
 	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
@@ -223,12 +233,18 @@ func (msg *msgOnionTunnelIncoming) Parse(data []byte) (err error) {
 	return
 }
 
+func (msg *msgOnionTunnelIncoming) PackedSize() (n int) {
+	n = 4
+	return
+}
+
 func (msg *msgOnionTunnelIncoming) Pack(buf []byte) (n int, err error) {
-	if cap(buf) < 4 {
+	n = msg.PackedSize()
+	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
 	binary.BigEndian.PutUint32(buf, msg.tunnelID)
-	return 4, nil
+	return n, nil
 }
 
 type msgOnionTunnelDestroy struct {
@@ -247,12 +263,18 @@ func (msg *msgOnionTunnelDestroy) Parse(data []byte) (err error) {
 	return
 }
 
+func (msg *msgOnionTunnelDestroy) PackedSize() (n int) {
+	n = 4
+	return
+}
+
 func (msg *msgOnionTunnelDestroy) Pack(buf []byte) (n int, err error) {
-	if cap(buf) < 4 {
+	n = msg.PackedSize()
+	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
 	binary.BigEndian.PutUint32(buf, msg.tunnelID)
-	return 4, nil
+	return n, nil
 }
 
 type msgOnionTunnelData struct {
@@ -275,8 +297,13 @@ func (msg *msgOnionTunnelData) Parse(data []byte) (err error) {
 	return
 }
 
-func (msg *msgOnionTunnelData) Pack(buf []byte) (n int, err error) {
+func (msg *msgOnionTunnelData) PackedSize() (n int) {
 	n = 4 + len(msg.data)
+	return
+}
+
+func (msg *msgOnionTunnelData) Pack(buf []byte) (n int, err error) {
+	n = msg.PackedSize()
 	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
@@ -303,15 +330,21 @@ func (msg *msgOnionError) Parse(data []byte) (err error) {
 	return
 }
 
+func (msg *msgOnionError) PackedSize() (n int) {
+	n = 8
+	return
+}
+
 func (msg *msgOnionError) Pack(buf []byte) (n int, err error) {
-	if cap(buf) < 8 {
+	n = msg.PackedSize()
+	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
 	binary.BigEndian.PutUint16(buf, uint16(msg.requestType))
 	buf[2] = 0x00
 	buf[3] = 0x00
 	binary.BigEndian.PutUint32(buf[4:], msg.tunnelID)
-	return 8, nil
+	return n, nil
 }
 
 type msgOnionCover struct {
@@ -330,12 +363,18 @@ func (msg *msgOnionCover) Parse(data []byte) (err error) {
 	return
 }
 
+func (msg *msgOnionCover) PackedSize() (n int) {
+	n = 4
+	return
+}
+
 func (msg *msgOnionCover) Pack(buf []byte) (n int, err error) {
-	if cap(buf) < 4 {
+	n = msg.PackedSize()
+	if cap(buf) < n {
 		return -1, errBufferTooSmall
 	}
 	binary.BigEndian.PutUint16(buf, msg.coverSize)
 	buf[2] = 0x00
 	buf[3] = 0x00
-	return 4, nil
+	return n, nil
 }
