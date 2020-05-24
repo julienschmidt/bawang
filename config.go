@@ -6,14 +6,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/go-ini/ini"
 	"io/ioutil"
+
+	"github.com/go-ini/ini"
 )
 
 type Config struct {
 	P2PHostname     string
 	P2PPort         int
-	RPSAPIAddress   string // api socket address of the RPS module
+	RPSAPIAddress   string // API socket address of the RPS module
 	OnionAPIAddress string
 	BuildTimeout    int
 	CreateTimeout   int
@@ -51,7 +52,6 @@ func (config *Config) FromFile(path string) error {
 	}
 
 	config.HostKey, err = x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-
 	if err != nil {
 		return fmt.Errorf("invalid hostkey: %v", err)
 	}

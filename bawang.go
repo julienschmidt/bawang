@@ -10,17 +10,14 @@ import (
 	"os"
 )
 
-var (
-	config Config
-)
-
 func handleConnection(conn net.Conn) {
+	defer conn.Close()
+
 	reader := bufio.NewReader(conn)
 	for {
 		// try and read the packet header
 		buf := make([]byte, 4)
 		n, err := io.ReadFull(reader, buf)
-
 		if err != nil || n != 4 {
 			fmt.Printf("Error when reading packet header: %v", err)
 			break
@@ -41,23 +38,19 @@ func handleConnection(conn net.Conn) {
 		// something like
 		// switch (messageType) do something with packet
 	}
-
-	conn.Close()
 }
 
-func openAPISocket() {
-	ln, err := net.Listen("tcp", config.OnionAPIAddress)
-
+func openAPISocket(cfg *Config) {
+	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		// TODO: error on listen
-		fmt.Printf("Error starting api listen socket: %v", err)
+		fmt.Printf("Error starting API listen socket: %v", err)
 		os.Exit(1)
 	}
-
 	defer ln.Close()
 
 	for {
-		c, err := ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
 			// TODO: error on client connection
 			fmt.Println("Error when accepting client connection")
@@ -65,7 +58,7 @@ func openAPISocket() {
 		}
 		fmt.Println("Received connection")
 
-		go handleConnection(c)
+		go handleConnection(conn)
 	}
 }
 
@@ -73,11 +66,12 @@ func main() {
 	var configFilePath string
 	flag.StringVar(&configFilePath, "config", "config.ini", "Path to config file, default is config.ini")
 
-	err := config.FromFile(configFilePath)
+	var cfg Config
+	err := cfg.FromFile(configFilePath)
 	if err != nil {
 		fmt.Printf("Error when loading config file: %v", err)
 		os.Exit(1)
 	}
 
-	openAPISocket()
+	openAPISocket(&cfg)
 }
