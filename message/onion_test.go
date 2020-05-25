@@ -115,7 +115,7 @@ func TestOnionTunnelDestroy(t *testing.T) {
 	assert.Equal(t, data, buf[:n])
 }
 
-func TestMsgOnionTunnelData(t *testing.T) {
+func TestOnionTunnelData(t *testing.T) {
 	msg := new(OnionTunnelData)
 
 	// check message type
@@ -139,7 +139,7 @@ func TestMsgOnionTunnelData(t *testing.T) {
 	assert.Equal(t, data, buf[:n])
 }
 
-func TestMsgOnionError(t *testing.T) {
+func TestOnionError(t *testing.T) {
 	msg := new(OnionError)
 
 	// check message type
@@ -163,7 +163,7 @@ func TestMsgOnionError(t *testing.T) {
 	assert.Equal(t, data, buf[:n])
 }
 
-func TestMsgOnionCover(t *testing.T) {
+func TestOnionCover(t *testing.T) {
 	msg := new(OnionCover)
 
 	// check message type
