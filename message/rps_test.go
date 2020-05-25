@@ -97,6 +97,10 @@ func TestRPSPeer(t *testing.T) {
 			DestHostKey: []byte{11, 12, 13, 14},
 		}, *msg)
 
+		assert.Equal(t, uint16(0x304), msg.PortMap.Get(AppTypeDHT))
+		assert.Equal(t, uint16(0x506), msg.PortMap.Get(AppTypeGossip))
+		assert.Equal(t, uint16(0), msg.PortMap.Get(AppTypeOnion))
+
 		buf := make([]byte, 4096)
 		n, err := msg.Pack(buf)
 		require.Nil(t, err)
@@ -124,6 +128,10 @@ func TestRPSPeer(t *testing.T) {
 			Address:     net.IP{22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7},
 			DestHostKey: []byte{23, 24, 25, 26},
 		}, *msg)
+
+		assert.Equal(t, uint16(0), msg.PortMap.Get(AppTypeDHT))
+		assert.Equal(t, uint16(0x304), msg.PortMap.Get(AppTypeNSE))
+		assert.Equal(t, uint16(0x506), msg.PortMap.Get(AppTypeOnion))
 
 		buf := make([]byte, 4096)
 		n, err := msg.Pack(buf)

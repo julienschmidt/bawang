@@ -62,3 +62,14 @@ type portMapping struct {
 }
 
 type portMap []portMapping
+
+// Get returns the port number for the given AppType.
+// If no entry is found, 0 is returned.
+func (pm portMap) Get(app AppType) (port uint16) {
+	for _, mapping := range pm {
+		if mapping.app == app {
+			return mapping.port
+		}
+	}
+	return 0
+}
