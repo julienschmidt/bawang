@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ensure that the implementations match the interface
@@ -29,6 +30,114 @@ func TestMsgHeader(t *testing.T) {
 		Size: 0x0102,
 		Type: 0x0304,
 	}, hdr)
+}
+
+func TestMsgRPSQuery(t *testing.T) {
+	msg := new(msgRPSQuery)
+
+	// check message type
+	require.Equal(t, msgTypeRPSQuery, msg.Type())
+
+	data := []byte{}
+	err := msg.Parse(data)
+	require.Nil(t, err)
+	require.Equal(t, msgRPSQuery{}, *msg)
+
+	buf := make([]byte, 4096)
+	n, err := msg.Pack(buf)
+	require.Nil(t, err)
+	require.Equal(t, len(data), n)
+	assert.Equal(t, data, buf[:n])
+}
+
+func TestMsgRPSPeer(t *testing.T) {
+	msg := new(msgRPSPeer)
+
+	// check message type
+	require.Equal(t, msgTypeRPSPeer, msg.Type())
+
+	// empty data
+	assert.Equal(t, errInvalidMessage, msg.Parse([]byte{}))
+
+	t.Run("IPv4EmptyPortMap", func(t *testing.T) {
+		data := []byte{
+			0, 1, 0, 0,
+			2, 3, 4, 5,
+			6, 7, 8, 9,
+		}
+		err := msg.Parse(data)
+		require.Nil(t, err)
+		require.Equal(t, msgRPSPeer{
+			port:        0x01,
+			ipv6:        false,
+			portMap:     portMap{},
+			address:     net.IP{0x5, 0x4, 0x3, 0x2},
+			destHostKey: []byte{6, 7, 8, 9},
+		}, *msg)
+
+		buf := make([]byte, 4096)
+		n, err := msg.Pack(buf)
+		require.Nil(t, err)
+		require.Equal(t, len(data), n)
+		assert.Equal(t, data, buf[:n])
+	})
+
+	t.Run("IPv4PortMap", func(t *testing.T) {
+		data := []byte{
+			0, 1, 2, 0,
+			0x02, 0x8A, 3, 4,
+			0x01, 0xF4, 5, 6,
+			7, 8, 9, 10,
+			11, 12, 13, 14,
+		}
+		err := msg.Parse(data)
+		require.Nil(t, err)
+		require.Equal(t, msgRPSPeer{
+			port: 0x01,
+			ipv6: false,
+			portMap: portMap{
+				portMapping{appTypeDHT, 0x304},
+				portMapping{appTypeGossip, 0x506},
+			},
+			address:     net.IP{0xA, 0x9, 0x8, 0x7},
+			destHostKey: []byte{11, 12, 13, 14},
+		}, *msg)
+
+		buf := make([]byte, 4096)
+		n, err := msg.Pack(buf)
+		require.Nil(t, err)
+		require.Equal(t, len(data), n)
+		assert.Equal(t, data, buf[:n])
+	})
+
+	t.Run("IPv6", func(t *testing.T) {
+		data := []byte{
+			0, 1, 2, 0 | flagIPv6,
+			0x02, 0x8A, 3, 4,
+			0x01, 0xF4, 5, 6,
+			7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+			23, 24, 25, 26,
+		}
+		err := msg.Parse(data)
+		require.Nil(t, err)
+		require.Equal(t, msgRPSPeer{
+			port: 0x01,
+			ipv6: true,
+			portMap: portMap{
+				portMapping{appTypeDHT, 0x304},
+				portMapping{appTypeGossip, 0x506},
+			},
+			address:     net.IP{22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7},
+			destHostKey: []byte{23, 24, 25, 26},
+		}, *msg)
+
+		buf := make([]byte, 4096)
+		n, err := msg.Pack(buf)
+		require.Nil(t, err)
+		require.Equal(t, len(data), n)
+		assert.Equal(t, data, buf[:n])
+	})
+
 }
 
 func TestMsgOnionTunnelBuild(t *testing.T) {

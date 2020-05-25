@@ -21,9 +21,9 @@ const (
 	msgTypeNSEEstimate msgType = 521
 	// NSE reserved until 539
 
-	msgTypeRSPQuery msgType = 540
-	msgTypeRSPPeer  msgType = 541
-	// RSP reserved until 559
+	msgTypeRPSQuery msgType = 540
+	msgTypeRPSPeer  msgType = 541
+	// RPS reserved until 559
 
 	msgTypeOnionTunnelBuild    msgType = 560
 	msgTypeOnionTunnelReady    msgType = 561
@@ -64,7 +64,30 @@ const (
 	// Enroll reserved until 689
 )
 
+type appType uint16
+
+func (at appType) valid() bool {
+	switch at {
+	case appTypeDHT,
+		appTypeGossip,
+		appTypeNSE,
+		appTypeOnion:
+		return true
+	default:
+		return false
+	}
+}
+
+//nolint:deadcode,unused,varcheck
+const (
+	appTypeDHT    appType = 650
+	appTypeGossip appType = 500
+	appTypeNSE    appType = 520
+	appTypeOnion  appType = 560
+)
+
 var (
+	errInvalidAppType = errors.New("invalid appType")
 	errInvalidMessage = errors.New("invalid message")
 	errBufferTooSmall = errors.New("buffer is too small for message")
 )
@@ -98,7 +121,156 @@ type message interface {
 	PackedSize() (n int)
 }
 
+func readIP(ipv6 bool, data []byte) net.IP {
+	if ipv6 {
+		return net.IP{
+			data[15], data[14], data[13], data[12],
+			data[11], data[10], data[9], data[8],
+			data[7], data[6], data[5], data[4],
+			data[3], data[2], data[1], data[0]}
+	} else {
+		return net.IP{data[3], data[2], data[1], data[0]}
+	}
+}
+
 const flagIPv6 = 0b10000000
+
+type msgRPSQuery struct {
+}
+
+func (msg *msgRPSQuery) Type() msgType {
+	return msgTypeRPSQuery
+}
+
+func (msg *msgRPSQuery) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *msgRPSQuery) PackedSize() (n int) {
+	n = 0
+	return
+}
+
+func (msg *msgRPSQuery) Pack(buf []byte) (n int, err error) {
+	n = msg.PackedSize()
+	return n, nil
+}
+
+type portMapping struct {
+	app  appType
+	port uint16
+}
+
+type portMap []portMapping
+
+type msgRPSPeer struct {
+	port        uint16
+	ipv6        bool
+	portMap     portMap
+	address     net.IP
+	destHostKey []byte
+}
+
+func (msg *msgRPSPeer) Type() msgType {
+	return msgTypeRPSPeer
+}
+
+func (msg *msgRPSPeer) Parse(data []byte) (err error) {
+	var minSize = 2 + 1 + 1 + 4
+	if len(data) < minSize {
+		return errInvalidMessage
+	}
+
+	msg.port = binary.BigEndian.Uint16(data)
+
+	portMapLen := uint8(data[2])
+	minSize += int(portMapLen) * 4
+
+	msg.ipv6 = data[3]&flagIPv6 > 0
+	if msg.ipv6 {
+		minSize += 12
+	}
+
+	if len(data) < minSize {
+		return errInvalidMessage
+	}
+
+	offset := 4
+	msg.portMap = make(portMap, portMapLen)
+	for i := uint8(0); i < portMapLen; i++ {
+		msg.portMap[i].app = appType(binary.BigEndian.Uint16(data[offset:]))
+		offset += 2
+		msg.portMap[i].port = binary.BigEndian.Uint16(data[offset:])
+		offset += 2
+	}
+
+	// read IP address (either 4 bytes if IPv4 or 16 bytes if IPv6)
+	if msg.ipv6 {
+		msg.address = readIP(true, data[offset:])
+		offset += 16
+	} else {
+		msg.address = readIP(false, data[offset:])
+		offset += 4
+	}
+
+	// must make a copy!
+	msg.destHostKey = append(msg.destHostKey[0:0], data[offset:]...)
+
+	return
+}
+
+func (msg *msgRPSPeer) PackedSize() (n int) {
+	n = 2 + 1 + 1 + len(msg.portMap)*4 + 4 + len(msg.destHostKey)
+	if msg.ipv6 {
+		n += 12
+	}
+	return
+}
+
+func (msg *msgRPSPeer) Pack(buf []byte) (n int, err error) {
+	n = msg.PackedSize()
+	if cap(buf) < n {
+		return -1, errBufferTooSmall
+	}
+	buf = buf[0:n]
+
+	binary.BigEndian.PutUint16(buf, msg.port)
+	buf[2] = uint8(len(msg.portMap))
+
+	flags := byte(0x00)
+	if msg.ipv6 {
+		flags |= flagIPv6
+	}
+	buf[3] = flags
+
+	offset := 4
+	for _, mapping := range msg.portMap {
+		if !mapping.app.valid() {
+			return -1, errInvalidAppType
+		}
+		binary.BigEndian.PutUint16(buf[offset:], uint16(mapping.app))
+		offset += 2
+		binary.BigEndian.PutUint16(buf[offset:], mapping.port)
+		offset += 2
+	}
+
+	addr := msg.address
+	if msg.ipv6 {
+		for i := 0; i < 16; i++ {
+			buf[offset] = addr[15-i]
+			offset += 1
+		}
+	} else {
+		buf[offset] = addr[3]
+		buf[offset+1] = addr[2]
+		buf[offset+2] = addr[1]
+		buf[offset+3] = addr[0]
+		offset += 4
+	}
+
+	copy(buf[offset:], msg.destHostKey)
+	return n, nil
+}
 
 type msgOnionTunnelBuild struct {
 	ipv6        bool
@@ -127,13 +299,9 @@ func (msg *msgOnionTunnelBuild) Parse(data []byte) (err error) {
 		if len(data) < keyOffset {
 			return errInvalidMessage
 		}
-		msg.address = net.IP{
-			data[19], data[18], data[17], data[16],
-			data[15], data[14], data[13], data[12],
-			data[11], data[10], data[9], data[8],
-			data[7], data[6], data[5], data[4]}
+		msg.address = readIP(true, data[4:])
 	} else {
-		msg.address = net.IP{data[7], data[6], data[5], data[4]}
+		msg.address = readIP(false, data[4:])
 	}
 
 	// must make a copy!
@@ -143,11 +311,10 @@ func (msg *msgOnionTunnelBuild) Parse(data []byte) (err error) {
 }
 
 func (msg *msgOnionTunnelBuild) PackedSize() (n int) {
-	n = 1 + 1 + 2 + 4
+	n = 1 + 1 + 2 + 4 + len(msg.destHostKey)
 	if msg.ipv6 {
 		n += 12
 	}
-	n += len(msg.destHostKey)
 	return
 }
 
