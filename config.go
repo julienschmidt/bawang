@@ -6,9 +6,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
-
 	"github.com/go-ini/ini"
+	"io/ioutil"
 )
 
 type Config struct {
@@ -18,6 +17,7 @@ type Config struct {
 	OnionAPIAddress string
 	BuildTimeout    int
 	CreateTimeout   int
+	APITimeout      int
 	Verbosity       int
 	HostKey         *rsa.PrivateKey
 }
@@ -34,6 +34,7 @@ func (config *Config) FromFile(path string) error {
 	config.P2PPort = cfg.Section("onion").Key("p2p_port").MustInt()
 	config.BuildTimeout = cfg.Section("onion").Key("build_timeout").MustInt(10)
 	config.CreateTimeout = cfg.Section("onion").Key("create_timeout").MustInt(10)
+	config.APITimeout = cfg.Section("onion").Key("api_timeout").MustInt(5)
 	config.Verbosity = cfg.Section("onion").Key("verbose").MustInt(0)
 
 	hostKeyFile := cfg.Section("onion").Key("hostkey").String()

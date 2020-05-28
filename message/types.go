@@ -24,6 +24,14 @@ const (
 	TypeOnionTunnelData     Type = 564
 	TypeOnionError          Type = 565
 	TypeOnionCover          Type = 566
+	// onion peer protocol message types
+	TypeOnionPeerCreate   Type = 567
+	TypeOnionPeerCreated  Type = 568
+	TypeOnionPeerExtend   Type = 569
+	TypeOnionPeerExtended Type = 570
+	TypeOnionPeerRelay    Type = 571
+	TypeOnionPeerData     Type = 572
+	TypeOnionPeerDestroy  Type = 573
 	// Onion reserved until 599
 
 	TypeAuthSessionStart       Type = 600

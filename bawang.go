@@ -7,7 +7,7 @@ import (
 
 func main() {
 	var configFilePath string
-	flag.StringVar(&configFilePath, "config", "config.ini", "Path to config file, default is config.ini")
+	flag.StringVar(&configFilePath, "config", "config.conf", "Path to config file, default is config.conf")
 
 	var cfg Config
 	err := cfg.FromFile(configFilePath)

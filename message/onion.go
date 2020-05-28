@@ -281,3 +281,143 @@ func (msg *OnionCover) Pack(buf []byte) (n int, err error) {
 	buf[3] = 0x00
 	return n, nil
 }
+
+type OnionPeerCreate struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerCreate) Type() Type {
+	return TypeOnionPeerCreate
+}
+
+func (msg *OnionPeerCreate) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerCreate) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerCreate) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}
+
+type OnionPeerCreated struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerCreated) Type() Type {
+	return TypeOnionPeerCreated
+}
+
+func (msg *OnionPeerCreated) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerCreated) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerCreated) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}
+
+type OnionPeerExtend struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerExtend) Type() Type {
+	return TypeOnionPeerExtend
+}
+
+func (msg *OnionPeerExtend) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerExtend) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerExtend) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}
+
+type OnionPeerExtended struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerExtended) Type() Type {
+	return TypeOnionPeerExtended
+}
+
+func (msg *OnionPeerExtended) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerExtended) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerExtended) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}
+
+type OnionPeerRelay struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerRelay) Type() Type {
+	return TypeOnionPeerRelay
+}
+
+func (msg *OnionPeerRelay) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerRelay) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerRelay) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}
+
+type OnionPeerData struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerData) Type() Type {
+	return TypeOnionPeerData
+}
+
+func (msg *OnionPeerData) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerData) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerData) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}
+
+type OnionPeerDestroy struct {
+	TunnelID uint16
+}
+
+func (msg *OnionPeerDestroy) Type() Type {
+	return TypeOnionPeerDestroy
+}
+
+func (msg *OnionPeerDestroy) Parse(data []byte) (err error) {
+	return
+}
+
+func (msg *OnionPeerDestroy) PackedSize() (n int) {
+	return
+}
+
+func (msg *OnionPeerDestroy) Pack(buf []byte) (n int, err error) {
+	return n, nil
+}

@@ -35,6 +35,19 @@ func (hdr *Header) Read(rd io.Reader) (err error) {
 	return
 }
 
+func (hdr *Header) Pack(buf []byte) {
+	binary.BigEndian.PutUint16(buf, hdr.Size)
+	binary.BigEndian.PutUint16(buf[2:], uint16(hdr.Type))
+}
+
+func PackMessage(buf []byte, msg Message) (n int, err error) {
+	header := Header{uint16(msg.PackedSize()) + HeaderSize, msg.Type()}
+	header.Pack(buf)
+	n, err = msg.Pack(buf[HeaderSize:])
+
+	return
+}
+
 type Message interface {
 	Type() Type
 	Parse(data []byte) error
