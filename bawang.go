@@ -15,6 +15,11 @@ func main() {
 		log.Fatalf("Error loading config file: %v", err)
 	}
 
+	go listenOnionSocket(&cfg)
+	//if err != nil {
+	//	log.Fatalf("Error listening on Onion socket: %v", err)
+	//}
+
 	err = listenAPISocket(&cfg)
 	if err != nil {
 		log.Fatalf("Error listening on API socket: %v", err)

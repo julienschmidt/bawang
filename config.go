@@ -6,8 +6,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/go-ini/ini"
 	"io/ioutil"
+
+	"github.com/go-ini/ini"
 )
 
 type Config struct {

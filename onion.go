@@ -3,9 +3,17 @@ package main
 import (
 	"bawang/message"
 	"bufio"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"io"
 	"log"
+	"math/big"
 	"net"
+	"strconv"
+	"time"
 )
 
 func handleOnionConnection(conn net.Conn) {
@@ -69,12 +77,45 @@ func handleOnionConnection(conn net.Conn) {
 	}
 }
 
-func listenOnionSocket(cfg *Config) error {
-	ln, err := net.Listen("tcp", cfg.P2PHostname+":"+string(cfg.P2PPort))
+func listenOnionSocket(cfg *Config) (err error) {
+	// construct tls certificate from p2p hostkey
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Voidphone"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour * 24 * 180),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, cfg.HostKey.Public(), cfg.HostKey)
 	if err != nil {
-		return err
+		log.Fatalf("Failed to create certificate: %s", err)
+		return
+	}
+
+	privKey := pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(cfg.HostKey),
+	}
+
+	cert, err := tls.X509KeyPair(derBytes, privKey.Bytes)
+	certs := []tls.Certificate{cert}
+
+	tlsConfig := tls.Config{
+		Certificates:       certs,
+		InsecureSkipVerify: true,
+	}
+	ln, err := tls.Listen("tcp", cfg.P2PHostname+":"+strconv.Itoa(cfg.P2PPort), &tlsConfig)
+	if err != nil {
+		return
 	}
 	defer ln.Close()
+	log.Printf("Onion Server Listening at %v:%v", cfg.P2PHostname, cfg.P2PPort)
 
 	for {
 		conn, err := ln.Accept()

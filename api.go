@@ -131,6 +131,7 @@ func listenAPISocket(cfg *Config) error {
 		return err
 	}
 	defer ln.Close()
+	log.Printf("API Server Listening at %v", cfg.OnionAPIAddress)
 
 	for {
 		conn, err := ln.Accept()
