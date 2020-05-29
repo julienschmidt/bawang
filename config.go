@@ -49,13 +49,28 @@ func (config *Config) FromFile(path string) error {
 	}
 
 	pemBlock, rest := pem.Decode(data)
-	if pemBlock == nil || len(rest) != 0 || pemBlock.Type != "RSA PRIVATE KEY" {
+	if pemBlock == nil || len(rest) != 0 {
 		return errors.New("invalid pem entry in host key file")
 	}
 
-	config.HostKey, err = x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-	if err != nil {
-		return fmt.Errorf("invalid hostkey: %v", err)
+	switch pemBlock.Type {
+	case "RSA PRIVATE KEY":
+		config.HostKey, err = x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+		if err != nil {
+			return fmt.Errorf("invalid hostkey: %v", err)
+		}
+	case "PRIVATE KEY":
+		key, err := x509.ParsePKCS8PrivateKey(pemBlock.Bytes)
+		if err != nil {
+			return fmt.Errorf("invalid hostkey: %v", err)
+		}
+		if rsaKey, ok := key.(*rsa.PrivateKey); ok {
+			config.HostKey = rsaKey
+		} else {
+			return errors.New("hostkey is not an RSA key")
+		}
+	default:
+		return errors.New("unknown key type")
 	}
 
 	if config.P2PHostname == "" {
