@@ -15,6 +15,12 @@ $ go build
 $ ./bawang -c <path to config file>
 ```
 
+## Generating the hostkey
+
+```sh
+$ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out hostkey.pem
+```
+
 ## Testing
 
 To run the complete test-suite (including formatting check and linters):
