@@ -12,6 +12,7 @@ import (
 // ensure that the implementations match the interface
 var (
 	_ Message = &RPSQuery{}
+	_ Message = &RPSPeer{}
 )
 
 func TestRPSQuery(t *testing.T) {
