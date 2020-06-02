@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"golang.org/x/crypto/nacl/box"
 	"io"
 	"log"
 	"math/big"
@@ -15,6 +16,104 @@ import (
 	"strconv"
 	"time"
 )
+
+type Circuit struct {
+	Peer        net.IP
+	PeerHostKey []byte
+}
+
+type Peer struct {
+	DHShared *[32]byte
+	Port     uint16
+	Address  net.IP
+	HostKey  []byte
+	TunnelID uint32
+}
+
+func performOnionHandshake(peer *Peer, wr *bufio.Writer, rd *bufio.Reader, conn *tls.Conn) (err error) {
+	pub, priv, err := box.GenerateKey(rand.Reader)
+	if err != nil {
+		log.Printf("Error generating diffie hellman keys: %v", err)
+		return
+	}
+	onionCreate := message.OnionPeerCreate{
+		DHPubkey: *pub,
+		TunnelID: peer.TunnelID,
+	}
+	err = message.WriteMessage(wr, &onionCreate)
+
+	err = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err != nil {
+		return
+	}
+
+	var hdr message.Header
+	err = hdr.Read(rd)
+	if err != nil {
+		if err == io.EOF {
+			return
+		}
+		log.Printf("Error reading message header: %v", err)
+		return
+	}
+
+	if hdr.Type != message.TypeOnionPeerCreated {
+		log.Println("Received invalid onion message from peer")
+		err = message.ErrInvalidMessage
+		return
+	}
+
+	// read message body
+	data := make([]byte, hdr.Size)
+	_, err = io.ReadFull(rd, data)
+	if err != nil {
+		log.Printf("Error reading message body: %v", err)
+		return
+	}
+
+	var onionCreated message.OnionPeerCreated
+	err = onionCreated.Parse(data)
+	if err != nil {
+		log.Printf("Error parsing message body: %v", err)
+		return
+	}
+
+	peer.DHShared = new([32]byte)
+	box.Precompute(peer.DHShared, pub, priv)
+
+	return
+}
+
+func buildOnionCircuit(peers [3]Peer, wr *bufio.Writer, rd *bufio.Reader, conn *tls.Conn) (err error) {
+	err = performOnionHandshake(&peers[0], wr, rd, conn)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func openOnionConnection(peers [3]Peer) (err error) {
+	tlsConfig := tls.Config{
+		InsecureSkipVerify: true,
+	}
+	conn, err := tls.Dial("tcp", peers[0].Address.String()+":"+strconv.Itoa(int(peers[0].Port)), &tlsConfig)
+	if err != nil {
+		log.Printf("Error opening tls connection to peer: %v", err)
+	}
+	defer conn.Close()
+
+	rd := bufio.NewReader(conn)
+	wr := bufio.NewWriter(conn)
+
+	err = buildOnionCircuit(peers, wr, rd, conn)
+
+	if err != nil {
+		return
+	}
+
+	return
+}
 
 func handleOnionConnection(conn net.Conn) {
 	defer conn.Close()

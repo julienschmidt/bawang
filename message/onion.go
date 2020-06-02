@@ -283,7 +283,8 @@ func (msg *OnionCover) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerCreate struct {
-	TunnelID uint16
+	TunnelID uint32
+	DHPubkey [32]byte
 }
 
 func (msg *OnionPeerCreate) Type() Type {
@@ -303,7 +304,9 @@ func (msg *OnionPeerCreate) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerCreated struct {
-	TunnelID uint16
+	TunnelID   uint32
+	DHPubkey   [32]byte
+	HostKeyMac []byte
 }
 
 func (msg *OnionPeerCreated) Type() Type {
@@ -323,7 +326,7 @@ func (msg *OnionPeerCreated) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerExtend struct {
-	TunnelID uint16
+	TunnelID uint32
 }
 
 func (msg *OnionPeerExtend) Type() Type {
@@ -343,7 +346,7 @@ func (msg *OnionPeerExtend) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerExtended struct {
-	TunnelID uint16
+	TunnelID uint32
 }
 
 func (msg *OnionPeerExtended) Type() Type {
@@ -363,7 +366,8 @@ func (msg *OnionPeerExtended) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerRelay struct {
-	TunnelID uint16
+	TunnelID uint32
+	Data     []byte
 }
 
 func (msg *OnionPeerRelay) Type() Type {
@@ -383,7 +387,8 @@ func (msg *OnionPeerRelay) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerData struct {
-	TunnelID uint16
+	TunnelID uint32
+	Data     []byte
 }
 
 func (msg *OnionPeerData) Type() Type {
@@ -403,7 +408,7 @@ func (msg *OnionPeerData) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerDestroy struct {
-	TunnelID uint16
+	TunnelID uint32
 }
 
 func (msg *OnionPeerDestroy) Type() Type {

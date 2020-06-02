@@ -1,6 +1,7 @@
 package message
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -44,6 +45,26 @@ func PackMessage(buf []byte, msg Message) (n int, err error) {
 	header := Header{uint16(msg.PackedSize()) + HeaderSize, msg.Type()}
 	header.Pack(buf)
 	n, err = msg.Pack(buf[HeaderSize:])
+
+	return
+}
+
+func WriteMessage(wr *bufio.Writer, msg Message) (err error) {
+	msgSize := msg.PackedSize() + HeaderSize
+	buf := make([]byte, msgSize)
+	n, err := PackMessage(buf, msg)
+	if err != nil {
+		return
+	}
+	if n != msgSize {
+		err = ErrBufferTooSmall
+		return
+	}
+
+	n, err = wr.Write(buf)
+	if n != msgSize {
+		err = errors.New("did not send all bytes")
+	}
 
 	return
 }
