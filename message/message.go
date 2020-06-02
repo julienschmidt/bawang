@@ -88,7 +88,7 @@ func readIP(ipv6 bool, data []byte) net.IP {
 	}
 }
 
-const flagIPv6 = 0b10000000
+const flagIPv6 = 1
 
 type portMapping struct {
 	app  AppType
