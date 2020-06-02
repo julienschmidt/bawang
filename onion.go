@@ -1,20 +1,21 @@
 package main
 
 import (
-	"bawang/message"
 	"bufio"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"golang.org/x/crypto/nacl/box"
 	"io"
 	"log"
 	"math/big"
 	"net"
 	"strconv"
 	"time"
+
+	"bawang/message"
+	"golang.org/x/crypto/nacl/box"
 )
 
 type Circuit struct {
