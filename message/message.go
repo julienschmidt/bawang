@@ -42,10 +42,13 @@ func (hdr *Header) Pack(buf []byte) {
 }
 
 func PackMessage(buf []byte, msg Message) (n int, err error) {
-	header := Header{uint16(msg.PackedSize()) + HeaderSize, msg.Type()}
+	n = msg.PackedSize() + HeaderSize
+	header := Header{uint16(n), msg.Type()}
 	header.Pack(buf)
-	n, err = msg.Pack(buf[HeaderSize:])
-
+	n2, err := msg.Pack(buf[HeaderSize:])
+	if err == nil && n2+HeaderSize != n {
+		return -1, ErrInvalidMessage
+	}
 	return
 }
 
