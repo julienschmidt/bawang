@@ -46,7 +46,7 @@ func PackMessage(buf []byte, msg Message) (n int, err error) {
 	header := Header{uint16(n), msg.Type()}
 	header.Pack(buf)
 	n2, err := msg.Pack(buf[HeaderSize:])
-	if err == nil && n2+HeaderSize != n {
+	if n2+HeaderSize != n && err == nil {
 		return -1, ErrInvalidMessage
 	}
 	return
