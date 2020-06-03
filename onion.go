@@ -23,14 +23,6 @@ type Circuit struct {
 	PeerHostKey []byte
 }
 
-type Peer struct {
-	DHShared *[32]byte
-	Port     uint16
-	Address  net.IP
-	HostKey  []byte
-	TunnelID uint32
-}
-
 func performOnionHandshake(peer *Peer, wr *bufio.Writer, rd *bufio.Reader, conn *tls.Conn) (err error) {
 	pub, priv, err := box.GenerateKey(rand.Reader)
 	if err != nil {

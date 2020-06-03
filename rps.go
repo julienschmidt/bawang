@@ -12,16 +12,25 @@ import (
 	"bawang/message"
 )
 
+type Peer struct {
+	DHShared *[32]byte
+	Port     uint16
+	Address  net.IP
+	HostKey  []byte
+	TunnelID uint32
+}
+
 var (
 	errInvalidPeer = errors.New("invalid peer")
 )
 
 type rps struct {
-	cfg    *Config
+	cfg *Config
+
+	l      sync.Mutex // guards fields below
 	msgBuf [message.MaxSize]byte
 	nc     net.Conn
 	rd     *bufio.Reader
-	l      sync.Mutex
 }
 
 func NewRPS(cfg *Config) (r *rps, err error) {
@@ -49,6 +58,7 @@ func (r *rps) Close() {
 }
 
 func (r *rps) getPeer() (peer Peer, err error) {
+	// concurrent IO not such a great idea
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -95,13 +105,14 @@ func (r *rps) getPeer() (peer Peer, err error) {
 		return
 	}
 
-	peer.Port = reply.PortMap.Get(message.AppTypeOnion)
-	if peer.Port == 0 {
-		// no Onion port
+	port := reply.PortMap.Get(message.AppTypeOnion)
+	if port == 0 { // no Onion port
 		err = errInvalidPeer
 		return
 	}
+
 	peer.Address = reply.Address
+	peer.Port = port
 	peer.HostKey = reply.DestHostKey // TODO: verify
 
 	return
