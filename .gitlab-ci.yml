@@ -28,3 +28,4 @@ lint:
   extends: .go-mod
   script:
     - golangci-lint run --timeout=5m --enable goconst,golint,maligned,misspell,prealloc,stylecheck ./...
+  allow_failure: true
