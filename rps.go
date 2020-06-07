@@ -13,10 +13,10 @@ import (
 )
 
 type Peer struct {
-	DHShared *[32]byte
-	Port     uint16
-	Address  net.IP
 	HostKey  []byte
+	DHShared *[32]byte
+	Address  net.IP
+	Port     uint16
 	TunnelID uint32
 }
 

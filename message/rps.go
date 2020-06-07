@@ -121,7 +121,7 @@ func (msg *RPSPeer) Pack(buf []byte) (n int, err error) {
 	if msg.IPv6 {
 		for i := 0; i < 16; i++ {
 			buf[offset] = addr[15-i]
-			offset += 1
+			offset++
 		}
 	} else {
 		buf[offset] = addr[3]
