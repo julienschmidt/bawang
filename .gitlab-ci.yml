@@ -1,0 +1,30 @@
+image: golangci/golangci-lint:latest
+
+stages:
+  - test
+
+.go-mod:
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  before_script:
+    - mkdir -p .go
+  cache:
+    paths:
+      - .go/pkg/mod/
+
+test:
+  stage: test
+  extends: .go-mod
+  script:
+    - go test -v -cover -covermode=count ./...
+
+gofmt:
+  stage: test
+  script:
+    - test -z "$(gofmt -d -s . | tee /dev/stderr)"
+
+lint:
+  stage: test
+  extends: .go-mod
+  script:
+    - golangci-lint run --timeout=5m --enable goconst,golint,maligned,misspell,prealloc,stylecheck ./...

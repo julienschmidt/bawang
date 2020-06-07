@@ -13,7 +13,7 @@ test -z "$(gofmt -d -s . | tee /dev/stderr)"
 # run linter
 echo "running linter..."
 if type "golangci-lint" &> /dev/null; then
-    golangci-lint run --enable goconst,prealloc ./...
+    golangci-lint run --enable goconst,golint,maligned,misspell,prealloc,stylecheck ./...
 else
     echo "WARNING: golangci-lint not installed. Only running go vet"
     echo "See: https://golangci-lint.run/usage/install/#local-installation"
