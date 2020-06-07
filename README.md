@@ -5,10 +5,7 @@ An implementation of onion routing in Go.
 ## Installation
 
 ```sh
-# install dependencies
-$ go mod download
-
-# build
+# build (dependencies are downloaded automatically)
 $ go build
 
 # run
