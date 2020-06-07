@@ -24,6 +24,17 @@ type Header struct {
 	Type Type
 }
 
+func (hdr *Header) Parse(data []byte) (err error) {
+	if len(data) < HeaderSize {
+		err = ErrInvalidMessage
+		return
+	}
+
+	hdr.Size = binary.BigEndian.Uint16(data[0:])
+	hdr.Type = Type(binary.BigEndian.Uint16(data[2:4]))
+	return
+}
+
 func (hdr *Header) Read(rd io.Reader) (err error) {
 	var header [HeaderSize]byte
 	_, err = io.ReadFull(rd, header[:])

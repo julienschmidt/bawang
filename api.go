@@ -45,7 +45,7 @@ func handleAPIConnection(conn net.Conn) {
 				continue
 			}
 			// TODO: some action
-			log.Println("Onion Tunnel Build")
+			log.Println("Onion TunnelID Build")
 
 		case message.TypeOnionTunnelDestroy:
 			var msg message.OnionTunnelDestroy
@@ -55,7 +55,7 @@ func handleAPIConnection(conn net.Conn) {
 				continue
 			}
 			// TODO: some action
-			log.Println("Onion Tunnel Destroy")
+			log.Println("Onion TunnelID Destroy")
 
 		case message.TypeOnionTunnelData:
 			var msg message.OnionTunnelData
@@ -65,7 +65,7 @@ func handleAPIConnection(conn net.Conn) {
 				continue
 			}
 			// TODO: some action
-			log.Println("Onion Tunnel Data")
+			log.Println("Onion TunnelID Data")
 
 		case message.TypeOnionCover:
 			var msg message.OnionCover
@@ -75,7 +75,7 @@ func handleAPIConnection(conn net.Conn) {
 				continue
 			}
 			// TODO: some action
-			log.Println("Onion Tunnel Cover")
+			log.Println("Onion TunnelID Cover")
 
 		default:
 			log.Println("Invalid message type:", hdr.Type)

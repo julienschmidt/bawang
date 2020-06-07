@@ -326,7 +326,8 @@ func (msg *OnionPeerCreated) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerExtend struct {
-	TunnelID uint32
+	TunnelID  uint32
+	CreateMsg []byte
 }
 
 func (msg *OnionPeerExtend) Type() Type {
@@ -346,7 +347,8 @@ func (msg *OnionPeerExtend) Pack(buf []byte) (n int, err error) {
 }
 
 type OnionPeerExtended struct {
-	TunnelID uint32
+	TunnelID   uint32
+	CreatedMsg []byte
 }
 
 func (msg *OnionPeerExtended) Type() Type {

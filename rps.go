@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/x509"
 	"errors"
 	"io"
 	"log"
@@ -11,14 +12,6 @@ import (
 
 	"bawang/message"
 )
-
-type Peer struct {
-	HostKey  []byte
-	DHShared *[32]byte
-	Address  net.IP
-	Port     uint16
-	TunnelID uint32
-}
 
 var (
 	errInvalidPeer = errors.New("invalid peer")
@@ -113,7 +106,11 @@ func (r *rps) getPeer() (peer Peer, err error) {
 
 	peer.Address = reply.Address
 	peer.Port = port
-	peer.HostKey = reply.DestHostKey // TODO: verify
+	peer.HostKey, err = x509.ParsePKCS1PublicKey(reply.DestHostKey) // TODO: verify
+	if err != nil {
+		log.Printf("Received peer with invalid host key from rps module: %v", err)
+		return
+	}
 
 	return
 }
