@@ -83,15 +83,22 @@ func handleAPIConnection(conn net.Conn) {
 	}
 }
 
-func listenAPISocket(cfg *Config) error {
+func listenAPISocket(cfg *Config, errOut chan error, quit chan struct {}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
-		return err
+		errOut <- err
+		return
 	}
 	defer ln.Close()
 	log.Printf("API Server Listening at %v", cfg.OnionAPIAddress)
 
 	for {
+		select {
+		case <-quit:
+			return
+		default:
+		}
+
 		conn, err := ln.Accept()
 		if err != nil {
 			// TODO: error on client connection
