@@ -5,9 +5,10 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestListenOnionSocket(t *testing.T) {
@@ -33,7 +34,7 @@ func TestListenOnionSocket(t *testing.T) {
 	time.Sleep(1 * time.Second) // annoyingly wait for the socket to fully start
 
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // no valid cert for this test
 	}
 	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), tlsConfig)
 	assert.Nil(t, err)

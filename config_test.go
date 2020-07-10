@@ -26,7 +26,7 @@ func TestConfigFromFile(t *testing.T) {
 		[]byte(" .testing/hostkey.pem"),
 		1)
 
-	err = ioutil.WriteFile(file.Name(), data, 0644)
+	err = ioutil.WriteFile(file.Name(), data, 0600)
 	require.Nil(t, err)
 
 	config := Config{}

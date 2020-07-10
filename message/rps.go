@@ -46,7 +46,7 @@ func (msg *RPSPeer) Parse(data []byte) (err error) {
 
 	msg.Port = binary.BigEndian.Uint16(data)
 
-	portMapLen := uint8(data[2])
+	portMapLen := data[2]
 	minSize += int(portMapLen) * 4
 
 	msg.IPv6 = data[3]&flagIPv6 > 0

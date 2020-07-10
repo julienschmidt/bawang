@@ -27,7 +27,6 @@ func main() {
 		close(quitChan)
 	}()
 
-
 	errChanOnion := make(chan error)
 
 	go ListenOnionSocket(&cfg, errChanOnion, quitChan)

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"bawang/message"
+
 	"golang.org/x/crypto/nacl/box"
 )
 
@@ -64,7 +65,7 @@ func NewLink(cfg *Config, address net.IP, port uint16, hostKey *rsa.PublicKey) (
 
 func (link *Link) connect() (err error) {
 	tlsConfig := tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
 	}
 	// TODO: implement host key checking here
 	link.nc, err = tls.Dial("tcp", link.Address.String()+":"+strconv.Itoa(int(link.Port)), &tlsConfig)
@@ -265,7 +266,7 @@ func handleOnionConnection(conn net.Conn) {
 	}
 }
 
-func ListenOnionSocket(cfg *Config, errOut chan error, quit chan struct {}) {
+func ListenOnionSocket(cfg *Config, errOut chan error, quit chan struct{}) {
 	// construct tls certificate from p2p hostkey
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
@@ -284,7 +285,7 @@ func ListenOnionSocket(cfg *Config, errOut chan error, quit chan struct {}) {
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		IsCA: true,
+		IsCA:                  true,
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, cfg.HostKey.Public(), cfg.HostKey)
@@ -320,7 +321,7 @@ func ListenOnionSocket(cfg *Config, errOut chan error, quit chan struct {}) {
 	certs := []tls.Certificate{cert}
 
 	tlsConfig := tls.Config{
-		Certificates:       certs,
+		Certificates: certs,
 		//InsecureSkipVerify: true,
 	}
 	ln, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), &tlsConfig)
