@@ -45,13 +45,17 @@ These are defined as follows:
 
 !!TODO!!
 
-#### `OnionCreate`
+TODO: how response?
 
-#### `OnionCreated`
+#### `OnionTunnelCreate`
+OnionTunnelCreate is sent from peer A to peer B to initiate the creation of tunnel over link between two peers.
 
-#### `OnionExtend`
+#### `OnionPeerCreated`
+OnionTunnelCreated is the response sent from peer B to peer A to confirm the creation of a tunnel initiated with OnionTunnelCreate.
 
-#### `OnionExtended`
+#### `OnionPeerExtend`
+
+#### `OnionPeerExtended`
 
 #### `OnionPeerRelay`
 
@@ -62,6 +66,8 @@ Go already enforces strict and explicit error handling by using an additional re
 Thus, we rely on those explicit error values wherever errors can occur, instead of "throwing exceptions" like in Java or Python for example.
 
 TODO error handling definitions
+
+- timeout when establishing a tunnel
 
 #### Network errors on voidphone API
 
@@ -80,7 +86,19 @@ In case of errors on our onion link layer
 - Potentially different underlying network protocols (QUIC / unreliable UDP in addition to TCP)
 
 ## Workload Distribution - Who did what
-?
+
+ML: Michael Loipführer, JS: Julien Schmidt
+
+- P2P Protocol Design: ML, JS
+- CI: JS
+- P2P Handshake Implementation: ML
+- API Protocol Message Parsing and Packing: JS
+- API Protocol Logic: ML
+- Documentation: ML, JS
 
 ## Effort Spent
 ? (individual effort)
+
+Michael Loipführer: TODO
+
+Julien Schmidt: TODO
