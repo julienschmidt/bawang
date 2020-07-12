@@ -1,6 +1,6 @@
 package p2p
 
-type Type uint16
+type Type uint8
 
 const (
 	TypeTunnelCreate  Type = 1
@@ -11,7 +11,7 @@ const (
 )
 
 // Relay sub protocol
-type RelayType uint16
+type RelayType uint8
 
 const (
 	RelayTypeTunnelExtend   RelayType = 1

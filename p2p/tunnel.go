@@ -47,7 +47,7 @@ func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
 
 type TunnelCreated struct {
 	DHPubKey      [32]byte // diffie hellman public key encrypted with the next hop identifier public key
-	SharedKeyHash [32]byte // TODO: do we need 32 bytes hash?
+	SharedKeyHash [32]byte
 }
 
 func (msg *TunnelCreated) Type() Type {
@@ -109,8 +109,7 @@ func (msg *TunnelDestroy) Pack(buf []byte) (n int, err error) {
 }
 
 type TunnelRelay struct {
-	RelayHeader
-	Data []byte
+	EncData [MaxRelayDataSize]byte
 }
 
 func (msg *TunnelRelay) Type() Type {
@@ -129,7 +128,7 @@ func (msg *TunnelRelay) Parse(data []byte) (err error) {
 }
 
 func (msg *TunnelRelay) PackedSize() (n int) {
-	return RelayHeaderSize + len(msg.Data)
+	return RelayHeaderSize + len(msg.EncData)
 }
 
 func (msg *TunnelRelay) Pack(buf []byte) (n int, err error) {

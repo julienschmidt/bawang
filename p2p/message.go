@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	HeaderSize = 4 + 2
+	HeaderSize = 4 + 1
+	MaxSize    = 512
 )
 
 var (
