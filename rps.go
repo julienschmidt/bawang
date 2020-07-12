@@ -47,7 +47,10 @@ func (r *rps) connect() (err error) {
 }
 
 func (r *rps) Close() {
-	r.nc.Close()
+	err := r.nc.Close()
+	if err != nil {
+		log.Printf("error closing RPS API connection %s", err)
+	}
 }
 
 func (r *rps) getPeer() (peer Peer, err error) {

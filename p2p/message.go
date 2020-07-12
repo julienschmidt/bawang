@@ -16,6 +16,9 @@ var (
 type Header struct {
 	TunnelID uint32
 	Type     Type
+	Reserved uint8
+	Version  uint8
+	Size     uint16 // TODO: where to put message length?
 }
 
 func (hdr *Header) Parse(data []byte) (err error) {
