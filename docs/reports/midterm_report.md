@@ -389,10 +389,10 @@ If a message not adhering to the fixed size scheme is received, the respective s
 ML: Michael Loipführer, JS: Julien Schmidt
 
 - P2P Protocol Design: ML, JS
-- CI: JS
+- Message Parsing and Packing: mostly JS
 - P2P Handshake Implementation: ML
-- API Protocol Message Parsing and Packing: JS
-- API Protocol Logic: ML
+- API Protocol Logic: mostly ML
+- CI: JS
 - Documentation: ML, JS
 
 
