@@ -76,7 +76,7 @@ When building a tunnel we strictly adhere to the specification, first forming an
 This initial handshake is part of our control protocol.
 To extend the tunnel we instruct the first hop to build a connection to the next peer in the tunnel with which we then again form an ephemeral session key.
 After fully constructing a tunnel data that is to be sent through the tunnel is then encapsulated in a relay message and iteratively encrypted with all ephemeral session keys.
-This means that for example a packet to Hop3 in a tunnel consisting of Source, Hop1, Hop2, Hop3 with corresponding ephemeral session keys `K_i` between the Source and Hop i is formed as `TunnelRelay(E_K_1(E_K_2(E_K_3(relay_metadata, data))))` and then sent to the first hop.
+This means that for example a packet to Hop3 in a tunnel consisting of Source, Hop1, Hop2, Hop3 with corresponding ephemeral session keys `K_i` between the Source and Hop i is formed as `TUNNEL RELAY (E_K_1(E_K_2(E_K_3(relay_metadata, data))))` and then sent to the first hop.
 Each hop removes on layer of encryption, checks if it should pass the message along and does so if needed.
 For a response each hop in turn adds a layer of encryption, meaning the message can only be fully encrypted by the destination as it is the only peer in possession of ephemeral session keys.
 
