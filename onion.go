@@ -27,7 +27,7 @@ import (
 var (
 	links                map[rsa.PublicKey]*Link
 	errAlreadyRegistered = errors.New("there is a listener already registered for this tunnel ID")
-	errInvalidCircuit    = errors.New("invalid circuit configuration")
+	errInvalidTunnel     = errors.New("invalid tunnel configuration")
 	errTimedOut          = errors.New("timed out")
 )
 
@@ -123,25 +123,25 @@ type Peer struct {
 	Port     uint16
 	Address  net.IP
 	HostKey  *rsa.PublicKey
-	TunnelID uint32 // TODO: maybe need to move this to Circuit
+	TunnelID uint32 // TODO: maybe need to move this to Tunnel
 }
 
-type Circuit struct {
+type Tunnel struct {
 	ID        uint32
 	Hops      []*Peer
 	localLink *Link
 	linkData  chan []byte
 }
 
-func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
-	if len(circuit.Hops) < 3 {
-		log.Printf("Insufficient number of hops in circuit")
-		err = errInvalidCircuit
+func (tun *Tunnel) BuildTunnel(cfg *Config) (err error) {
+	if len(tun.Hops) < 3 {
+		log.Printf("Insufficient number of hops in tunnel")
+		err = errInvalidTunnel
 		return
 	}
 
 	// TODO: implement more than only the first hop
-	firstHop := circuit.Hops[0]
+	firstHop := tun.Hops[0]
 	link, ok := links[*firstHop.HostKey]
 	if !ok {
 		link, err = NewLink(cfg, firstHop.Address, firstHop.Port, firstHop.HostKey)
@@ -150,7 +150,7 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 			return
 		}
 	}
-	circuit.localLink = link
+	tun.localLink = link
 
 	pub, priv, err := box.GenerateKey(rand.Reader)
 	if err != nil {
@@ -161,8 +161,8 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 		DHPubKey: *pub,
 	}
 
-	circuit.linkData = make(chan []byte, 10)
-	err = link.registerChannel(firstHop.TunnelID, circuit.linkData)
+	tun.linkData = make(chan []byte, 10)
+	err = link.registerChannel(firstHop.TunnelID, tun.linkData)
 	if err != nil {
 		fmt.Printf("Failed to open receive data channel to link: %v", err)
 		return
@@ -208,7 +208,7 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 func handleOnionConnection(conn net.Conn) {
 	defer conn.Close()
 
-	var msgBuf [message.MaxSize]byte
+	// var msgBuf [message.MaxSize]byte
 	rd := bufio.NewReader(conn)
 
 	for {
