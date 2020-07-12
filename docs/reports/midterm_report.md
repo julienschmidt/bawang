@@ -47,8 +47,8 @@ Our onion protocol resembles a thinned out and adapted version of the onion prot
 
 Similar to the original tor protocol we divide our protocol definition in two parts: control and relay, with the relay part forming its own sub protocol.
 
-The control protocol consists of the messages `TunnelCreate`, `TunnelCreated` and `TunnelDestroy` which are responsible for control communication between two neighboring hops in a tunnel.
-The relay sub protocol is used when passing messages through a tunnel and consists of the messages `TunnelExtend`, `TunnelExtended` and `TunnelRelay`.
+The control protocol consists of the messages `TunnelCreate`, `TunnelCreated`, `TunnelDestroy` and `TunnelRelay` which are responsible for control communication between two neighboring hops in a tunnel.
+The relay sub protocol is used when passing messages through a tunnel and consists of the messages `RelayTunnelExtend`, `RelayTunnelExtended` and `RelayTunnelData`.
 
 Connections between hops in a tunnel are secured via standard TLS encryption such that all tunnel protocol commands cannot be deciphered by outside attackers.
 
@@ -72,11 +72,14 @@ OnionTunnelCreated is the response sent from peer B to peer A to confirm the cre
 
 #### `TunnelDestroy`
 
-#### `TunnelExtend`
-
-#### `TunnelExtended`
-
 #### `TunnelRelay`
+
+#### `RelayTunnelExtend`
+
+#### `RelayTunnelExtended`
+
+#### `RelayTunnelData`
+
 
 ### Protocol Flow
 #### Initial Handshake and Tunnel Extension
