@@ -6,18 +6,18 @@ import (
 	"log"
 	"net"
 
-	"bawang/message"
+	"bawang/api"
 )
 
 func handleAPIConnection(conn net.Conn) {
 	defer conn.Close()
 
-	var msgBuf [message.MaxSize]byte
+	var msgBuf [api.MaxSize]byte
 	rd := bufio.NewReader(conn)
 
 	for {
 		// read the message header
-		var hdr message.Header
+		var hdr api.Header
 		err := hdr.Read(rd)
 		if err != nil {
 			if err == io.EOF {
@@ -37,8 +37,8 @@ func handleAPIConnection(conn net.Conn) {
 
 		// handle message
 		switch hdr.Type {
-		case message.TypeOnionTunnelBuild:
-			var msg message.OnionTunnelBuild
+		case api.TypeOnionTunnelBuild:
+			var msg api.OnionTunnelBuild
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing message body: %v", err)
@@ -47,8 +47,8 @@ func handleAPIConnection(conn net.Conn) {
 			// TODO: some action
 			log.Println("Onion TunnelID Build")
 
-		case message.TypeOnionTunnelDestroy:
-			var msg message.OnionTunnelDestroy
+		case api.TypeOnionTunnelDestroy:
+			var msg api.OnionTunnelDestroy
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing message body: %v", err)
@@ -57,8 +57,8 @@ func handleAPIConnection(conn net.Conn) {
 			// TODO: some action
 			log.Println("Onion TunnelID Destroy")
 
-		case message.TypeOnionTunnelData:
-			var msg message.OnionTunnelData
+		case api.TypeOnionTunnelData:
+			var msg api.OnionTunnelData
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing message body: %v", err)
@@ -67,8 +67,8 @@ func handleAPIConnection(conn net.Conn) {
 			// TODO: some action
 			log.Println("Onion TunnelID Data")
 
-		case message.TypeOnionCover:
-			var msg message.OnionCover
+		case api.TypeOnionCover:
+			var msg api.OnionCover
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing message body: %v", err)

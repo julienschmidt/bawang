@@ -18,7 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"bawang/message"
+	"bawang/api"
+	"bawang/p2p"
 
 	"golang.org/x/crypto/nacl/box"
 )
@@ -37,7 +38,7 @@ type Link struct {
 	PeerHostKey *rsa.PublicKey
 
 	l      sync.Mutex // guards fields below
-	msgBuf [message.MaxSize]byte
+	msgBuf [api.MaxSize]byte
 	nc     net.Conn
 	rd     *bufio.Reader
 
@@ -97,7 +98,7 @@ func (link *Link) destroy() (err error) {
 
 func (link *Link) Send(msg message.Message) (err error) {
 	data := link.msgBuf[:]
-	n, err := message.PackMessage(data, msg)
+	n, err := p2p.PackMessage(data, tunnelID, msg)
 	if err != nil {
 		return
 	}
@@ -184,7 +185,7 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 		return
 	}
 
-	var hdr message.Header
+	var hdr p2p.Header
 	err = hdr.Parse(response)
 	if err != nil {
 		log.Printf("Error reading message header: %v", err)
@@ -192,8 +193,8 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 	}
 
 	// read message body
-	var onionCreated message.OnionPeerCreated
-	err = onionCreated.Parse(response[message.HeaderSize:])
+	var onionCreated p2p.TunnelCreated
+	err = onionCreated.Parse(response[p2p.HeaderSize:])
 	if err != nil {
 		log.Printf("Error parsing message body: %v", err)
 		return
@@ -213,7 +214,7 @@ func handleOnionConnection(conn net.Conn) {
 
 	for {
 		// read the message header
-		var hdr message.Header
+		var hdr p2p.Header
 		err := hdr.Read(rd)
 		if err != nil {
 			if err == io.EOF {
@@ -223,46 +224,46 @@ func handleOnionConnection(conn net.Conn) {
 			return
 		}
 
-		// ready message body
-		data := msgBuf[:hdr.Size]
-		_, err = io.ReadFull(rd, data)
-		if err != nil {
-			log.Printf("Error reading message body: %v", err)
-			return
-		}
+		// // ready message body
+		// data := msgBuf[:hdr.Size]
+		// _, err = io.ReadFull(rd, data)
+		// if err != nil {
+		// 	log.Printf("Error reading message body: %v", err)
+		// 	return
+		// }
 
-		// handle message
-		switch hdr.Type {
-		case message.TypeOnionPeerCreate:
-			var msg message.OnionPeerCreate
-			err := msg.Parse(data)
-			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
-				continue
-			}
-			// TODO: some action
-			log.Println("Onion TunnelID Build")
+		// // handle message
+		// switch hdr.Type {
+		// case p2p.TypeTunnelCreate:
+		// 	var msg p2p.TunnelCreate
+		// 	err := msg.Parse(data)
+		// 	if err != nil {
+		// 		log.Printf("Error parsing message body: %v", err)
+		// 		continue
+		// 	}
+		// 	// TODO: some action
+		// 	log.Println("Onion TunnelID Build")
 
-		case message.TypeOnionPeerExtend:
-			var msg message.OnionPeerExtend
-			err := msg.Parse(data)
-			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
-				continue
-			}
-			// TODO: some action
-			log.Println("Onion TunnelID Data")
+		// case p2p.RelayTypeTunnelExtend:
+		// 	var msg p2p.RelayTunnelExtend
+		// 	err := msg.Parse(data)
+		// 	if err != nil {
+		// 		log.Printf("Error parsing message body: %v", err)
+		// 		continue
+		// 	}
+		// 	// TODO: some action
+		// 	log.Println("Onion TunnelID Data")
 
-		case message.TypeOnionPeerRelay:
-			var msg message.OnionPeerRelay
-			err := msg.Parse(data)
-			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
-				continue
-			}
-			// TODO: some action
-			log.Println("Onion TunnelID Cover")
-		}
+		// case p2p.TypeTunnelRelay:
+		// 	var msg p2p.TunnelRelay
+		// 	err := msg.Parse(data)
+		// 	if err != nil {
+		// 		log.Printf("Error parsing message body: %v", err)
+		// 		continue
+		// 	}
+		// 	// TODO: some action
+		// 	log.Println("Onion TunnelID Cover")
+		// }
 	}
 }
 

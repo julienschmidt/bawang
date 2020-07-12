@@ -1,4 +1,4 @@
-package message
+package api
 
 import (
 	"bufio"
@@ -8,15 +8,22 @@ import (
 	"net"
 )
 
+const (
+	MaxSize    = 2<<15 - 1
+	HeaderSize = 2 + 2
+)
+
+type Message interface {
+	Type() Type
+	Parse(data []byte) error
+	Pack(buf []byte) (n int, err error)
+	PackedSize() (n int)
+}
+
 var (
 	ErrInvalidAppType = errors.New("invalid appType")
 	ErrInvalidMessage = errors.New("invalid message")
 	ErrBufferTooSmall = errors.New("buffer is too small for message")
-)
-
-const (
-	MaxSize    = 2<<15 - 1
-	HeaderSize = 2 + 2
 )
 
 type Header struct {
@@ -30,7 +37,7 @@ func (hdr *Header) Parse(data []byte) (err error) {
 		return
 	}
 
-	hdr.Size = binary.BigEndian.Uint16(data[0:])
+	hdr.Size = binary.BigEndian.Uint16(data)
 	hdr.Type = Type(binary.BigEndian.Uint16(data[2:4]))
 	return
 }
@@ -81,13 +88,6 @@ func WriteMessage(wr *bufio.Writer, msg Message) (err error) {
 	}
 
 	return
-}
-
-type Message interface {
-	Type() Type
-	Parse(data []byte) error
-	Pack(buf []byte) (n int, err error)
-	PackedSize() (n int)
 }
 
 func readIP(ipv6 bool, data []byte) net.IP {

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"bawang/message"
+	"bawang/api"
 )
 
 var (
@@ -21,7 +21,7 @@ type rps struct {
 	cfg *Config
 
 	l      sync.Mutex // guards fields below
-	msgBuf [message.MaxSize]byte
+	msgBuf [api.MaxSize]byte
 	nc     net.Conn
 	rd     *bufio.Reader
 }
@@ -59,9 +59,9 @@ func (r *rps) getPeer() (peer Peer, err error) {
 	defer r.l.Unlock()
 
 	// send query
-	var query message.RPSQuery
+	var query api.RPSQuery
 	data := r.msgBuf[:]
-	n, err := message.PackMessage(data, &query)
+	n, err := api.PackMessage(data, &query)
 	if err != nil {
 		return
 	}
@@ -79,15 +79,15 @@ func (r *rps) getPeer() (peer Peer, err error) {
 		return
 	}
 
-	var hdr message.Header
+	var hdr api.Header
 	err = hdr.Read(r.rd)
-	if err != nil || hdr.Type != message.TypeRPSPeer {
+	if err != nil || hdr.Type != api.TypeRPSPeer {
 		log.Print("invalid or no message received from rps module")
-		err = message.ErrInvalidMessage
+		err = api.ErrInvalidMessage
 		return
 	}
 
-	var reply message.RPSPeer
+	var reply api.RPSPeer
 	data = r.msgBuf[:hdr.Size]
 	_, err = io.ReadFull(r.rd, data)
 	if err != nil {
@@ -101,7 +101,7 @@ func (r *rps) getPeer() (peer Peer, err error) {
 		return
 	}
 
-	port := reply.PortMap.Get(message.AppTypeOnion)
+	port := reply.PortMap.Get(api.AppTypeOnion)
 	if port == 0 { // no Onion port
 		err = errInvalidPeer
 		return

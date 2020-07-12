@@ -1,4 +1,4 @@
-package message
+package api
 
 type Type uint16
 
