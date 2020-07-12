@@ -1,7 +1,10 @@
 # Midterm Report
+
 Midterm Report for Bawang, brought to you by Julien Schmidt and Michael Loipführer.
 
+
 ## Changes to Initial Assumptions
+
 So far we haven't made any substantial changes to our initial assumptions/plans.
 
 ## Architecture
@@ -12,45 +15,52 @@ Link: Encrypted network connection between two peers. Data for multiple independ
 
 Tunnel: End-to-end onion connection consisting of multiple hops.
 
+
 ### Logical Structure
-Since Go does not have classes, the main approach to structure a Go project is to group corresponding features/functions in files or sub modules.
-Implementation of data processing and handling is mainly done by using structs and methods on these structs.
 
-All code that handles protocol messages (parsing and packing) for both our onion protocol and the VoidPhone API protocol is grouped in the submodule `message`.
-We defined a general `Message` interface that is implemented for each message type handling byte packing and unpacking.
+All code handling VoidPhone API protocol messages can be found in the `api` sub-module.
+Likewise, there is a `p2p` sub-module containing the code for our P2P onion tunnel protocol.
+Both define a general `Message` interface that is implemented for each message type, handling byte packing and unpacking. Implementation of data processing and handling is mainly done by using structs and methods on these structs, similar to the concept of classes in other languages.
 
-Currently, all logic handling our onion protocol is implemented in `onion.go` storing connection and peer data in different structs (`Link`, `Peer`, `Tunnel`). We might move this logic to a different submodule.
+The application logic itself is in the main module, grouped into several files:
+
+`onion.go` contains all logic for our onion protocol, like storing connection and peer data in different structs (`Link`, `Peer`, `Tunnel`).
+If this grows further in complexity, we might also move it into a sub-module.
 
 Config parsing and option storing is implemented in `config.go` which exposes a struct (`Config`) containing all configuration parameters.
 
-Communication with the RPS module API is implemented in `rps.go` exposing a simple interface to fetch a peer from the RPS API.
+Communication with the RPS module API is implemented in `rps.go`, exposing a simple interface to fetch a peer from the RPS API.
 
 The main entry point of our module is `bawang.go`, which will start both the API listen socket and our onion listen socket.
 
-### Process Architecture
-We mainly make use of goroutines for parallelization. Each incoming/outgoing onion API or VoidPhone API connection will start a goroutine to handle messages from connected peer.
 
-Additionally, our two network sockets listeners (VoidPhone API, onion API) are started in a goroutine each.
+### Process Architecture
+
+We mainly make use of goroutines for concurrency, which are a form of green-threads and provide a thread-like interface for async execution. If one goroutine blocks, another goroutine (if available) gets scheduled on the processor. Thus, we do not need to manually spin up an event-loop or keep track of the state. 
+
+As goroutines are very lightweight (compared to OS Threads), we make excessive use of them to enable concurrency. Our two network socket listeners (VoidPhone API, P2P Onion Tunnels) are started in a goroutine each. Further, each VoidPhone API and P2P connection is handled in its own goroutine instead of the "socket goroutine", thus enabling concurrent handling of those.
+
 
 ### Networking
+
 For network layer operations we use standard Go library functions for TLS and TCP connection handling.
 
 ### Security Measures
 We use two layers of authentication and encryption in our P2P protocol.
-Connections between hops in our onion circuits are formed by TLS connections using the peer key as server certificate for authentication.
-On top of this link layer we perform authenticated Diffie-Hellman handshakes in our onion protocol to generate symmetric keys for our onion layer encryption.
+Connections between hops (links) in our onion tunnels are formed by TLS connections using the peer key as server certificate for authentication.
+On top of this link layer we perform authenticated Diffie-Hellman handshakes in our onion tunnel protocol to generate symmetric keys for our onion layer encryption.
 
 For all cryptographic operations we use library functions, mainly from the go standard library with additional functions for Diffie-Hellman cryptography from the `golang.org/x/crypto` library.
 
 ## Protocol
 Our onion protocol resembles a thinned out and adapted version of the onion protocol used by the TOR project.
 
-Similar to the original tor protocol we divide our protocol definition in two parts: control and relay, with the relay part forming its own sub protocol.
+Similar to the original TOR protocol we divide our protocol definition in two parts: control and relay, with the relay part forming its own sub protocol.
 
 The control protocol consists of the messages `TunnelCreate`, `TunnelCreated`, `TunnelDestroy` and `TunnelRelay` which are responsible for control communication between two neighboring hops in a tunnel.
-The relay sub protocol is used when passing messages through a tunnel and consists of the messages `RelayTunnelExtend`, `RelayTunnelExtended` and `RelayTunnelData`.
+The relay sub protocol is used when passing messages through a tunnel (using `TunnelRelay` messages) and consists of the messages `RelayTunnelExtend`, `RelayTunnelExtended` and `RelayTunnelData`.
 
-Connections between hops in a tunnel are secured via standard TLS encryption such that all tunnel protocol commands cannot be deciphered by outside attackers.
+Connections between hops (links) in a tunnel are secured via standard TLS encryption such that all tunnel protocol commands cannot be deciphered by outside attackers.
 
 When building a tunnel we strictly adhere to the specification, first forming an ephemeral session key with the first hop in the tunnel which we then use to encrypt all further traffic.
 This initial handshake is part of our control protocol.
@@ -292,19 +302,20 @@ If no mapping is stored the message is invalid, and the hop will tear down the t
 Go already enforces strict and explicit error handling by using an additional return values (of type `error`) in functions.
 Thus, we rely on those explicit error values wherever errors can occur, instead of "throwing exceptions" like in Java or Python for example.
 
-TODO error handling definitions
+#### VoidPhone API
 
-- timeout when establishing a tunnel
-
-#### Network errors on VoidPhone API
-
-#### Data errors on VoidPhone API
 If we receive invalid or malformed data from other VoidPhone components via the API we immediately terminate the connection.
 
-#### Network errors on link layer
-In case of errors on our onion link layer
 
-#### Data errors on the onion layer
+#### P2P Protocol
+
+Our P2P protocol employs TLS for the connection between two hops. If the MAC of a packet does not match, the packet is simply ignored, which might eventually lead to a timeout e.g. in the case of a lost `TunnelCreate` message.
+
+If the digest of relay message does not match and the message cannot be relayed further, it is treated as an invalid message and the tunnel is destroyed immediately.
+
+If a message not adhering to the fixed size scheme is received, the respective sender is assumed broken or malicious and is disconnected immediately.
+
+
 
 ## Future Work
 - Finish final implementation of our onion protocol
