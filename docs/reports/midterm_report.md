@@ -56,7 +56,7 @@ For all cryptographic operations we use library functions, mainly from the Go st
 
 We employ fixed packet size schemes against traffic analysis in two places:
 Packets between links are padded to the fixed size of 512 to prevent information leakage to an outside adversary through the packet sizes.
-Likewise, relayed packets (in `TunnelRelay`) have fixed size 496 (512 minus the message and relay header sizes) to prevent information leakage to an adversary operating a peer used for the tunnel. Thus, the peer cannot for example derive the number of previous hops from the packet size.
+Likewise, relayed packets (in `TUNNEL RELAY`) have fixed size 496 (512 minus the message and relay header sizes) to prevent information leakage to an adversary operating a peer used for the tunnel. Thus, the peer cannot for example derive the number of previous hops from the packet size.
 
 The relay header contains a digest for end-to-end checksum for integrity checking.
 
@@ -67,8 +67,8 @@ Our onion protocol resembles a thinned out and adapted version of the onion prot
 
 Similar to the original TOR protocol we divide our protocol definition in two parts: control and relay, with the relay part forming its own sub protocol.
 
-The control protocol consists of the messages `TunnelCreate`, `TunnelCreated`, `TunnelDestroy` and `TunnelRelay` which are responsible for control communication between two neighboring hops in a tunnel.
-The relay sub protocol is used when passing messages through a tunnel (using `TunnelRelay` messages) and consists of the messages `RelayTunnelExtend`, `RelayTunnelExtended` and `RelayTunnelData`.
+The control protocol consists of the messages `TUNNEL CREATE`, `TUNNEL CREATED`, `TUNNEL DESTROY` and `TUNNEL RELAY` which are responsible for control communication between two neighboring hops in a tunnel.
+The relay sub protocol is used when passing messages through a tunnel (using `TUNNEL RELAY` messages) and consists of the messages `RELAY TUNNEL EXTEND`, `RELAY TUNNEL EXTENDED` and `RELAY TUNNEL DATA`.
 
 Connections between hops (links) in a tunnel are secured via standard TLS encryption such that all tunnel protocol commands cannot be deciphered by outside attackers.
 
@@ -99,8 +99,15 @@ Our protocol messages all share the common header:
 
 The header specifies the tunnel ID of the tunnel the message is addressed to and the message type as an unsigned 8 bit integer.
 
+| Value | Message Type   |
+|-------|----------------|
+|     1 | TUNNEL CREATE  |
+|     2 | TUNNEL CREATED |
+|     3 | TUNNEL DESTROY |
+|     4 | TUNNEL RELAY   |
 
-#### `TunnelCreate`
+
+#### `TUNNEL CREATE`
 
 ~~~ascii
  0                   1                   2                   3
@@ -120,7 +127,7 @@ In order to facilitate unilateral authentication of the next hop with regards to
 Since the second message in the handshake requires sending a hash of the derived Diffie-Hellman shared key knowledge of the shared key proves ownership over the private identifier key and therefore authenticates the next hop.
 
 
-#### `TunnelCreated`
+#### `TUNNEL CREATED`
 
 ~~~ascii
  0                   1                   2                   3
@@ -136,11 +143,11 @@ Since the second message in the handshake requires sending a hash of the derived
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
-`TunnelCreated` is sent as a response to `TunnelCreate` containing the next hops Diffie-Hellman public key for ephemeral key derivation as well as a hash of the derived key proving ownership of the private identifier key.
-After receiving the `TunnelCreated` message both peers have derived the ephemeral Diffie-Hellman key used for encryption in our relay sub protocol.
+`TUNNEL CREATED` is sent as a response to `TUNNEL CREATE` containing the next hops Diffie-Hellman public key for ephemeral key derivation as well as a hash of the derived key proving ownership of the private identifier key.
+After receiving the `TUNNEL CREATED` message both peers have derived the ephemeral Diffie-Hellman key used for encryption in our relay sub protocol.
 
 
-#### `TunnelDestroy`
+#### `TUNNEL DESTROY`
 
 ~~~ascii
  0                   1                   2                   3
@@ -148,15 +155,15 @@ After receiving the `TunnelCreated` message both peers have derived the ephemera
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                           Tunnel ID                           |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| TUNNEL DESTROY |                  Reserved                    |
+| TUNNEL DESTROY |              Reserved / Padding              |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
 Sent to neighboring hops to initial tunnel teardown.
-When receiving a `TunnelDestroy` message peers will tear down the tunnel and send a new `TunnelDestroy` message to the next hop in the tunnel.
+When receiving a `TUNNEL DESTROY` message peers will tear down the tunnel and send a new `TUNNEL DESTROY` message to the next hop in the tunnel.
 
 
-#### `TunnelRelay`
+#### `TUNNEL RELAY`
 
 ~~~ascii
  0                   1                   2                   3
@@ -172,8 +179,8 @@ When receiving a `TunnelDestroy` message peers will tear down the tunnel and sen
 
 This message defines the wrapping header around our relay sub protocol which is used when passing data and commands through tunnels across multiple hops.
 When passing a relay message to a destination hop the whole relay sub protocol message is iteratively encrypted using the ephemeral session keys shared between the intermediate hops and the source peer.
-Each hop receiving a `TunnelRelay` message decrypts the relay sub message and verifies the message digest.
-Depending on whether the digest ist valid the hop then forwards the full `TunnelRelay` message with the top most encryption layer removed along the circuit or processes the relay sub message.
+Each hop receiving a `TUNNEL RELAY` message decrypts the relay sub message and verifies the message digest.
+Depending on whether the digest ist valid the hop then forwards the full `TUNNEL RELAY` message with the top most encryption layer removed along the circuit or processes the relay sub message.
 For more details consult the section on protocol flow.
 
 
@@ -191,11 +198,17 @@ For more details consult the section on protocol flow.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
-When constructing a relay message the sender first computes the message digest as a secure hash `H(K)` of the full `TunnelRelay` message including the sub message payload with the digest field initially set to 0.
+When constructing a relay message the sender first computes the message digest as a secure hash `H(K)` of the full `TUNNEL RELAY` message including the sub message payload with the digest field initially set to 0.
 Afterwards the sender iteratively encrypts the relay sub message with the ephemeral session keys of all intermediate hops on the route to the packet's destination peer.
 
+| Value | Relay Type |
+|-------|------------|
+|     1 | EXTEND     |
+|     2 | EXTENDED   |
+|     3 | DATA       |
 
-#### `RelayTunnelExtend`
+
+#### `TUNNEL RELAY EXTEND`
 
 ~~~ascii
  0                   1                   2                   3
@@ -207,7 +220,7 @@ Afterwards the sender iteratively encrypts the relay sub message with the epheme
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                       Digest (8 byte)                         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|        Encrypted Diffie Hellman Public Key  (32 byte)         |
+|        Encrypted Diffie-Hellman Public Key  (32 byte)         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |    Reserved / Padding        |V|     Next Hop Onion Port      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -217,10 +230,10 @@ Afterwards the sender iteratively encrypts the relay sub message with the epheme
 
 Relay sub protocol message to instruct a hop in the tunnel to extend the tunnel to the peer given by next hop IP address and next hop onion port.
 The flag `V` is set to 0 for an IPv4 address as the next hop IP address and to 1 for an IPv6 address.
-The encrypted Diffie-Hellman public key will then be packed into a `TunnelCreate` message to initiate a handshake with the next hop.
+The encrypted Diffie-Hellman public key will then be packed into a `TUNNEL CREATE` message to initiate a handshake with the next hop.
 
 
-#### `RelayTunnelExtended`
+#### `TUNNEL RELAY EXTENDED`
 
 ~~~ascii
  0                   1                   2                   3
@@ -232,16 +245,16 @@ The encrypted Diffie-Hellman public key will then be packed into a `TunnelCreate
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                       Digest (8 byte)                         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|              Diffie Hellman Public Key  (32 byte)             |
+|              Diffie-Hellman Public Key  (32 byte)             |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                  DH shared key hash (32 byte)                 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
-Relays the created message from the next hop back to the original sender of the `TunnelExtend` message.
+Relays the created message from the next hop back to the original sender of the `TUNNEL EXTEND` message.
 
 
-#### `RelayTunnelData`
+#### `TUNNEL RELAY DATA`
 
 ~~~ascii
  0                   1                   2                   3
@@ -269,22 +282,22 @@ Relay sub protocol message to finally pass normal data payload along the constru
 | Source  |                                                             | Hop1  |                               | Hop2  |
 +---------+                                                             +-------+                               +-------+
      |                                                                      |                                       |
-     | TunnelCreate (ID_1, E_h1p(g^x1))                                     |                                       |
+     | TUNNEL CREATE (ID_1, E_h1p(g^x1))                                    |                                       |
      |--------------------------------------------------------------------->|                                       |
      |                                                                      |                                       |
-     |                                    TunnelCreated (ID_1, g^y1, H(K1)) |                                       |
+     |                                   TUNNEL CREATED (ID_1, g^y1, H(K1)) |                                       |
      |<---------------------------------------------------------------------|                                       |
      |                                                                      |                                       |
-     | TunnelExtend(ID1, E_K1(E_h2p(g^x2), addr, port, dest host key))      |                                       |
+     | TUNNEL EXTEND (ID1, E_K1(E_h2p(g^x2), addr, port, dest host key))    |                                       |
      |--------------------------------------------------------------------->|                                       |
      |                                                                      |                                       |
-     |                                                                      | TunnelCreate (ID2, g^x2)              |
+     |                                                                      | TUNNEL CREATE (ID2, g^x2)             |
      |                                                                      |-------------------------------------->|
      |                                                                      |                                       |
-     |                                                                      |     TunnelCreated (ID2, g^y2, H(K2))  |
+     |                                                                      |    TUNNEL CREATED (ID2, g^y2, H(K2))  |
      |                                                                      |<--------------------------------------|
      |                                                                      |                                       |
-     |                              TunnelExtended(ID1, E_K1(g^y2, H(K2)))  |                                       |
+     |                            TUNNEL EXTENDED (ID1, E_K1(g^y2, H(K2)))  |                                       |
      |<---------------------------------------------------------------------|                                       |
      |                                                                      |                                       |
 ~~~
@@ -301,7 +314,7 @@ In order to extend the currently existing circuit we make use of our tunnel rela
 We send a TunnelExtend message with the relay sub message encrypted by the shared Diffie-Hellman key to Hop1 instructing it to extend the circuit by another hop.
 Hop1 decrypts the relay message containing the onion API address/port, the identifier public key of the next hop and a Diffie-Hellman public key similar to the first create message.
 It generates a new tunnel ID (ID2) used for the connection between it and then next hop (Hop2) and saves the mapping.
-It then constructs a `TunnelCreate` message and performs the create/created handshake with Hop2, sending the Diffie-Hellman public key of Hop2 back to us in a `TunnelCreated` message.
+It then constructs a `TUNNEL CREATE` message and performs the create/created handshake with Hop2, sending the Diffie-Hellman public key of Hop2 back to us in a `TUNNEL CREATED` message.
 
 In the above diagram `H()` denotes a secure hash function and `E_abc()` encryption with key `abc`.
 
@@ -313,33 +326,33 @@ In the above diagram `H()` denotes a secure hash function and `E_abc()` encrypti
 | Source  |                                                   | Hop1  |                                              | Hop2  |                                        | Destination |
 +---------+                                                   +-------+                                              +-------+                                        +-------------+
      |                                                            |                                                      |                                                   |
-     | TunnelRelay(ID1, E_k1(E_k2(E_dst(relay_meta, data))))      |                                                      |                                                   |
+     | TUNNEL RELAY (ID1, E_k1(E_k2(E_dst(relay_meta, data))))    |                                                      |                                                   |
      |----------------------------------------------------------->|                                                      |                                                   |
      |                                                            |                                                      |                                                   |
-     |                                                            | TunnelRelay(ID2, E_k2(E_dst(relay_meta, data)))      |                                                   |
+     |                                                            | TUNNEL RELAY (ID2, E_k2(E_dst(relay_meta, data)))    |                                                   |
      |                                                            |----------------------------------------------------->|                                                   |
      |                                                            |                                                      |                                                   |
-     |                                                            |                                                      | TunnelRelay(ID3, E_dst(relay_meta, data))         |
+     |                                                            |                                                      | TUNNEL RELAY (ID3, E_dst(relay_meta, data))       |
      |                                                            |                                                      |-------------------------------------------------->|
      |                                                            |                                                      |                                                   |
-     |                                                            |                                                      |        TunnelRelay(ID3, E_dst(relay_meta, reply)) |
+     |                                                            |                                                      |      TUNNEL RELAY (ID3, E_dst(relay_meta, reply)) |
      |                                                            |                                                      |<--------------------------------------------------|
      |                                                            |                                                      |                                                   |
-     |                                                            |     TunnelRelay(ID2, E_k2(E_dst(relay_meta, reply))) |                                                   |
+     |                                                            |   TUNNEL RELAY (ID2, E_k2(E_dst(relay_meta, reply))) |                                                   |
      |                                                            |<-----------------------------------------------------|                                                   |
      |                                                            |                                                      |                                                   |
-     |     TunnelRelay(ID1, E_k1(E_k2(E_dst(relay_meta, reply)))) |                                                      |                                                   |
+     |    TUNNEL RELAY (ID1, E_k1(E_k2(E_dst(relay_meta, reply)))) |                                                      |                                                   |
      |<-----------------------------------------------------------|                                                      |                                                   |
      |                                                            |                                                      |                                                   |
 ~~~
 
-To pass data (or commands) along the tunnel we construct a `TunnelRelay` (or other relay sub protocol messages) message containing our data payload.
+To pass data (or commands) along the tunnel we construct a `TUNNEL RELAY` (or other relay sub protocol messages) message containing our data payload.
 After computing the message digest and embedding it in the message we then encrypt it iteratively using the ephemeral session keys shared with each hop.
 When passing the message through the tunnel each hop first decrypts the relay sub protocol part of the message using its session key.
 It then checks whether the decrypted digest matches the received message.
-If the digest matches the message is destined for the current hop which will then either accept the payload data in case of a `TunnelRelay` message or interpret the relay sub command such as a `TunnelExtend`.
+If the digest matches the message is destined for the current hop which will then either accept the payload data in case of a `TUNNEL RELAY` message or interpret the relay sub command such as a `TUNNEL EXTEND`.
 In case the digest does match the decrypted message the hop checks if it can pass the message along the tunnel, meaning if it has stored a tunnel ID mapping passing the message along if one is found.
-If no mapping is stored the message is invalid, and the hop will tear down the tunnel by sending `TunnelDestroy` to its adjacent hops.
+If no mapping is stored the message is invalid, and the hop will tear down the tunnel by sending `TUNNEL DESTROY` to its adjacent hops.
 
 
 ### Exception Handling
@@ -355,7 +368,7 @@ If we receive invalid or malformed data from other VoidPhone components via the 
 
 #### P2P Protocol
 
-Our P2P protocol employs TLS for the connection between two hops. If the MAC of a packet does not match, the packet is simply ignored, which might eventually lead to a timeout e.g. in the case of a lost `TunnelCreate` message.
+Our P2P protocol employs TLS for the connection between two hops. If the MAC of a packet does not match, the packet is simply ignored, which might eventually lead to a timeout e.g. in the case of a lost `TUNNEL CREATE` message.
 
 If the digest of relay message does not match and the message cannot be relayed further, it is treated as an invalid message and the tunnel is destroyed immediately.
 
