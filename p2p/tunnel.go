@@ -46,7 +46,7 @@ func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
 }
 
 type TunnelCreated struct {
-	DHPubKey   [32]byte // diffie hellman public key encrypted with the next hop identifier public key
+	DHPubKey      [32]byte // diffie hellman public key encrypted with the next hop identifier public key
 	SharedKeyHash [32]byte // TODO: do we need 32 bytes hash?
 }
 
