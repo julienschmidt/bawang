@@ -11,14 +11,20 @@ const (
 
 var (
 	ErrInvalidMessage = errors.New("invalid message")
+	ErrBufferTooSmall = errors.New("buffer is too small for message")
 )
+
+type Message interface {
+	Type() Type
+	Parse(data []byte) error
+	Pack(buf []byte) (n int, err error)
+	PackedSize() (n int)
+}
 
 type Header struct {
 	TunnelID uint32
 	Type     Type
-	Reserved uint8
-	Version  uint8
-	Size     uint16 // TODO: where to put message length?
+	//Size     uint16 // TODO: where to put message length?
 }
 
 func (hdr *Header) Parse(data []byte) (err error) {
