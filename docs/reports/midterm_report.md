@@ -27,7 +27,7 @@ The application logic itself is in the main module, grouped into several files:
 `onion.go` contains all logic for our onion protocol, like storing connection and peer data in different structs (`Link`, `Peer`, `Tunnel`).
 If this grows further in complexity, we might also move it into a sub-module.
 
-Config parsing and option storing is implemented in `config.go` which exposes a struct (`Config`) containing all configuration parameters.
+Config parsing and option storing is implemented in `config.go` which exposes a struct `Config` containing all configuration parameters.
 
 Communication with the RPS module API is implemented in `rps.go`, exposing a simple interface to fetch a peer from the RPS API.
 
@@ -43,16 +43,26 @@ As goroutines are very lightweight (compared to OS Threads), we make excessive u
 
 ### Networking
 
-For network layer operations we use standard Go library functions for TLS and TCP connection handling.
+For network layer operations we use standard Go library functions for TLS and TCP connection handling. All connections are handled concurrently in separate goroutines such that those do not block each other.
+
 
 ### Security Measures
+
 We use two layers of authentication and encryption in our P2P protocol.
 Connections between hops (links) in our onion tunnels are formed by TLS connections using the peer key as server certificate for authentication.
 On top of this link layer we perform authenticated Diffie-Hellman handshakes in our onion tunnel protocol to generate symmetric keys for our onion layer encryption.
 
-For all cryptographic operations we use library functions, mainly from the go standard library with additional functions for Diffie-Hellman cryptography from the `golang.org/x/crypto` library.
+For all cryptographic operations we use library functions, mainly from the Go standard library with additional functions for Diffie-Hellman cryptography from the `golang.org/x/crypto` library.
+
+We employ fixed packet size schemes against traffic analysis in two places:
+Packets between links are padded to the fixed size of 512 to prevent information leakage to an outside adversary through the packet sizes.
+Likewise, relayed packets (in `TunnelRelay`) have fixed size 496 (512 minus the message and relay header sizes) to prevent information leakage to an adversary operating a peer used for the tunnel. Thus, the peer cannot for example derive the number of previous hops from the packet size.
+
+The relay header contains a digest for end-to-end checksum for integrity checking.
+
 
 ## Protocol
+
 Our onion protocol resembles a thinned out and adapted version of the onion protocol used by the TOR project.
 
 Similar to the original TOR protocol we divide our protocol definition in two parts: control and relay, with the relay part forming its own sub protocol.
@@ -72,8 +82,11 @@ For a response each hop in turn adds a layer of encryption, meaning the message 
 
 For more detail consult sections on each message type, and the general protocol flow.
 
+
 ### Message Types
+
 Our protocol messages all share the common header:
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -83,9 +96,12 @@ Our protocol messages all share the common header:
 |    TYPE    |                       ...                        |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
-specifying the tunnel ID of the tunnel the message is addressed to and the message type as an unsigned 8 bit integer.
+
+The header specifies the tunnel ID of the tunnel the message is addressed to and the message type as an unsigned 8 bit integer.
+
 
 #### `TunnelCreate`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -94,15 +110,18 @@ specifying the tunnel ID of the tunnel the message is addressed to and the messa
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 | TUNNEL CREATE  |    Version    |      Reserved / Padding      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|         Encrypted Diffie Hellman Public Key  (32 byte)        |
+|         Encrypted Diffie-Hellman Public Key  (32 byte)        |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
+
 This message is sent to a peer to initiate our onion protocol handshake.
-It includes a version for future proofing our protocol as well as a diffie hellman public key used for ephemeral key derivation.
-In order to facilitate unilateral authentication of the next hop with regards to the tunnel's initiator the diffie hellman public key is encrypted using the public identifier key of the next hop.
-Since the second message in the handshake requires sending a hash of the derived diffie hellman shared key knowledge of the shared key proves ownership over the private identifier key and therefore authenticates the next hop.
+It includes a version for future proofing our protocol as well as a Diffie-Hellman public key used for ephemeral key derivation.
+In order to facilitate unilateral authentication of the next hop with regards to the tunnel's initiator the Diffie-Hellman public key is encrypted using the public identifier key of the next hop.
+Since the second message in the handshake requires sending a hash of the derived Diffie-Hellman shared key knowledge of the shared key proves ownership over the private identifier key and therefore authenticates the next hop.
+
 
 #### `TunnelCreated`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -116,10 +135,13 @@ Since the second message in the handshake requires sending a hash of the derived
 |                  DH shared key hash (32 byte)                 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
-`TunnelCreated` is sent as a response to `TunnelCreate` containing the next hops diffie hellman public key for ephemeral key derivation as well as a hash of the derived key proving ownership of the private identifier key.
-After receiving the `TunnelCreated` message both peers have derived the ephemeral diffie hellman key used for encryption in our relay sub protocol.
+
+`TunnelCreated` is sent as a response to `TunnelCreate` containing the next hops Diffie-Hellman public key for ephemeral key derivation as well as a hash of the derived key proving ownership of the private identifier key.
+After receiving the `TunnelCreated` message both peers have derived the ephemeral Diffie-Hellman key used for encryption in our relay sub protocol.
+
 
 #### `TunnelDestroy`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -129,10 +151,13 @@ After receiving the `TunnelCreated` message both peers have derived the ephemera
 | TUNNEL DESTROY |                  Reserved                    |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
+
 Sent to neighboring hops to initial tunnel teardown.
 When receiving a `TunnelDestroy` message peers will tear down the tunnel and send a new `TunnelDestroy` message to the next hop in the tunnel.
 
+
 #### `TunnelRelay`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -144,29 +169,34 @@ When receiving a `TunnelDestroy` message peers will tear down the tunnel and sen
 |            ... Encrypted Relay Sub Message                    |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
+
 This message defines the wrapping header around our relay sub protocol which is used when passing data and commands through tunnels across multiple hops.
 When passing a relay message to a destination hop the whole relay sub protocol message is iteratively encrypted using the ephemeral session keys shared between the intermediate hops and the source peer.
 Each hop receiving a `TunnelRelay` message decrypts the relay sub message and verifies the message digest.
 Depending on whether the digest ist valid the hop then forwards the full `TunnelRelay` message with the top most encryption layer removed along the circuit or processes the relay sub message.
 For more details consult the section on protocol flow.
 
+
 #### `Relay Sub Protocol Header`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                           Tunnel ID                           |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|  TUNNEL RELAY  |   RELAY TYPE  |             Size             |
+|  TUNNEL RELAY  |   Relay Type  |             Size             |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                       Digest (8 byte)                         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
-When constructing a relay message the sender first computes the message digest as a secure hash `H(K)` of the full
-`TunnelRelay` message including the sub message payload with the digest field initially set to 0.
+
+When constructing a relay message the sender first computes the message digest as a secure hash `H(K)` of the full `TunnelRelay` message including the sub message payload with the digest field initially set to 0.
 Afterwards the sender iteratively encrypts the relay sub message with the ephemeral session keys of all intermediate hops on the route to the packet's destination peer.
 
+
 #### `RelayTunnelExtend`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -184,11 +214,14 @@ Afterwards the sender iteratively encrypts the relay sub message with the epheme
 |    Next Hop IP Address (IPv4 - 32 bits, IPv6 - 128 bits)      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
+
 Relay sub protocol message to instruct a hop in the tunnel to extend the tunnel to the peer given by next hop IP address and next hop onion port.
 The flag `V` is set to 0 for an IPv4 address as the next hop IP address and to 1 for an IPv6 address.
-The encrypted diffie hellman public key will then be packed into a `TunnelCreate` message to initiate a handshake with the next hop.
+The encrypted Diffie-Hellman public key will then be packed into a `TunnelCreate` message to initiate a handshake with the next hop.
+
 
 #### `RelayTunnelExtended`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -204,9 +237,12 @@ The encrypted diffie hellman public key will then be packed into a `TunnelCreate
 |                  DH shared key hash (32 byte)                 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
+
 Relays the created message from the next hop back to the original sender of the `TunnelExtend` message.
 
+
 #### `RelayTunnelData`
+
 ~~~ascii
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -220,11 +256,14 @@ Relays the created message from the next hop back to the original sender of the 
 |                          Data Payload                         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
+
 Relay sub protocol message to finally pass normal data payload along the constructed tunnels.
 
 
 ### Protocol Flow
+
 #### Initial Handshake and Tunnel Extension
+
 ~~~ascii
 +---------+                                                             +-------+                               +-------+
 | Source  |                                                             | Hop1  |                               | Hop2  |
@@ -249,23 +288,26 @@ Relay sub protocol message to finally pass normal data payload along the constru
      |<---------------------------------------------------------------------|                                       |
      |                                                                      |                                       |
 ~~~
-To build an onion tunnel we initially generate a diffie hellman key pair with public key `g^x1`.
+
+To build an onion tunnel we initially generate a Diffie-Hellman key pair with public key `g^x1`.
 We encrypt our public key using the identifier public key (host key, `h1p`) of the next hop in our tunnel and send it to said hop.
-The next hop in turn generates a diffie hellman key pair and computes the shared diffie hellman key.
-To perform unilateral authentication the next hop hashes the computed shared diffie hellman key and sends it along with its diffie hellman public key back to us.
-We then also compute the diffie hellman shared key and verify the hash Hop1 sent to us.
-If the hash is valid Hop1 has proven its identity by being able to decrypt our diffie hellman public key using its corresponding hop identifier private key.
+The next hop in turn generates a Diffie-Hellman key pair and computes the shared Diffie-Hellman key.
+To perform unilateral authentication the next hop hashes the computed shared Diffie-Hellman key and sends it along with its Diffie-Hellman public key back to us.
+We then also compute the Diffie-Hellman shared key and verify the hash Hop1 sent to us.
+If the hash is valid Hop1 has proven its identity by being able to decrypt our Diffie-Hellman public key using its corresponding hop identifier private key.
 Each of the handshake messages contain the tunnel ID used to uniquely identify that connection between hops.
 
 In order to extend the currently existing circuit we make use of our tunnel relay sub protocol.
-We send a TunnelExtend message with the relay sub message encrypted by the shared diffie hellman key to Hop1 instructing it to extend the circuit by another hop.
-Hop1 decrypts the relay message containing the onion API address/port, the identifier public key of the next hop and a diffie hellman public key similar to the first create message.
+We send a TunnelExtend message with the relay sub message encrypted by the shared Diffie-Hellman key to Hop1 instructing it to extend the circuit by another hop.
+Hop1 decrypts the relay message containing the onion API address/port, the identifier public key of the next hop and a Diffie-Hellman public key similar to the first create message.
 It generates a new tunnel ID (ID2) used for the connection between it and then next hop (Hop2) and saves the mapping.
-It then constructs a `TunnelCreate` message and performs the create/created handshake with Hop2, sending the diffie hellman public key of Hop2 back to us in a `TunnelCreated` message.
+It then constructs a `TunnelCreate` message and performs the create/created handshake with Hop2, sending the Diffie-Hellman public key of Hop2 back to us in a `TunnelCreated` message.
 
 In the above diagram `H()` denotes a secure hash function and `E_abc()` encryption with key `abc`.
 
+
 #### Data Relaying
+
 ~~~ascii
 +---------+                                                   +-------+                                              +-------+                                        +-------------+
 | Source  |                                                   | Hop1  |                                              | Hop2  |                                        | Destination |
@@ -290,6 +332,7 @@ In the above diagram `H()` denotes a secure hash function and `E_abc()` encrypti
      |<-----------------------------------------------------------|                                                      |                                                   |
      |                                                            |                                                      |                                                   |
 ~~~
+
 To pass data (or commands) along the tunnel we construct a `TunnelRelay` (or other relay sub protocol messages) message containing our data payload.
 After computing the message digest and embedding it in the message we then encrypt it iteratively using the ephemeral session keys shared with each hop.
 When passing the message through the tunnel each hop first decrypts the relay sub protocol part of the message using its session key.
@@ -298,9 +341,12 @@ If the digest matches the message is destined for the current hop which will the
 In case the digest does match the decrypted message the hop checks if it can pass the message along the tunnel, meaning if it has stored a tunnel ID mapping passing the message along if one is found.
 If no mapping is stored the message is invalid, and the hop will tear down the tunnel by sending `TunnelDestroy` to its adjacent hops.
 
+
 ### Exception Handling
+
 Go already enforces strict and explicit error handling by using an additional return values (of type `error`) in functions.
 Thus, we rely on those explicit error values wherever errors can occur, instead of "throwing exceptions" like in Java or Python for example.
+
 
 #### VoidPhone API
 
@@ -318,10 +364,12 @@ If a message not adhering to the fixed size scheme is received, the respective s
 
 
 ## Future Work
+
 - Finish final implementation of our onion protocol
 - Integrate onion protocol functions with the API layer
 - Fully integrate the `voidphone_testing` library into our continuous integration testing
 - Potentially different underlying network protocols (QUIC / unreliable UDP in addition to TCP)
+
 
 ## Workload Distribution - Who did what
 
@@ -333,6 +381,7 @@ ML: Michael Loipführer, JS: Julien Schmidt
 - API Protocol Message Parsing and Packing: JS
 - API Protocol Logic: ML
 - Documentation: ML, JS
+
 
 ## Effort Spent
 ? (individual effort)
