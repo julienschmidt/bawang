@@ -6,6 +6,12 @@ So far we haven't made any substantial changes to our initial assumptions/plans.
 
 ## Architecture
 
+### Terminology
+
+Link: Encrypted network connection between two peers. Data for multiple independent tunnels may be transmitted over the same link.
+
+Tunnel: End-to-end onion connection consisting of multiple hops.
+
 ### Logical Structure
 Since Go does not have classes, the main approach to structure a Go project is to group corresponding features/functions in files or sub modules.
 Implementation of data processing and handling is mainly done by using structs and methods on these structs.
