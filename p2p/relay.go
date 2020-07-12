@@ -13,8 +13,8 @@ const (
 // RelayHeader is the header of a relay sub protocol protocol cell
 type RelayHeader struct {
 	RelayType RelayType
-	Digest    [8]byte
 	Size      uint16
+	Digest    [8]byte
 }
 
 func (hdr *RelayHeader) Parse(data []byte) (err error) {

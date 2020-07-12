@@ -60,25 +60,157 @@ This means that for example a packet to Hop3 in a tunnel consisting of Source, H
 Each hop removes on layer of encryption, checks if it should pass the message along and does so if needed.
 For a response each hop in turn adds a layer of encryption, meaning the message can only be fully encrypted by the destination as it is the only peer in possession of ephemeral session keys.
 
-For more detail consult sections on each message types and the general protocol flow.
+For more detail consult sections on each message type, and the general protocol flow.
 
 ### Message Types
+Our protocol messages all share the common header:
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    TYPE    |                       ...                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+specifying the tunnel ID of the tunnel the message is addressed to and the message type as an unsigned 8 bit integer.
 
 #### `TunnelCreate`
-OnionTunnelCreate is sent from peer A to peer B to initiate the creation of tunnel over link between two peers.
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| TUNNEL CREATE  |    Version    |      Reserved / Padding      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|         Encrypted Diffie Hellman Public Key  (32 byte)        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+This message is sent to a peer to initiate our onion protocol handshake.
+It includes a version for future proofing our protocol as well as a diffie hellman public key used for ephemeral key derivation.
+In order to facilitate unilateral authentication of the next hop with regards to the tunnel's initiator the diffie hellman public key is encrypted using the public identifier key of the next hop.
+Since the second message in the handshake requires sending a hash of the derived diffie hellman shared key knowledge of the shared key proves ownership over the private identifier key and therefore authenticates the next hop.
 
 #### `TunnelCreated`
-OnionTunnelCreated is the response sent from peer B to peer A to confirm the creation of a tunnel initiated with OnionTunnelCreate.
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| TUNNEL CREATED |             Reserved / Padding               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     DH Public Key (32 byte)                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                  DH shared key hash (32 byte)                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+`TunnelCreated` is sent as a response to `TunnelCreate` containing the next hops diffie hellman public key for ephemeral key derivation as well as a hash of the derived key proving ownership of the private identifier key.
+After receiving the `TunnelCreated` message both peers have derived the ephemeral diffie hellman key used for encryption in our relay sub protocol.
 
 #### `TunnelDestroy`
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| TUNNEL DESTROY |                  Reserved                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+Sent to neighboring hops to initial tunnel teardown.
+When receiving a `TunnelDestroy` message peers will tear down the tunnel and send a new `TunnelDestroy` message to the next hop in the tunnel.
 
 #### `TunnelRelay`
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  TUNNEL RELAY  |       Encrypted Relay Sub Message ...        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            ... Encrypted Relay Sub Message                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+This message defines the wrapping header around our relay sub protocol which is used when passing data and commands through tunnels across multiple hops.
+When passing a relay message to a destination hop the whole relay sub protocol message is iteratively encrypted using the ephemeral session keys shared between the intermediate hops and the source peer.
+Each hop receiving a `TunnelRelay` message decrypts the relay sub message and verifies the message digest.
+Depending on whether the digest ist valid the hop then forwards the full `TunnelRelay` message with the top most encryption layer removed along the circuit or processes the relay sub message.
+For more details consult the section on protocol flow.
+
+#### `Relay Sub Protocol Header`
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  TUNNEL RELAY  |   RELAY TYPE  |             Size             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Digest (8 byte)                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+When constructing a relay message the sender first computes the message digest as a secure hash `H(K)` of the full
+`TunnelRelay` message including the sub message payload with the digest field initially set to 0.
+Afterwards the sender iteratively encrypts the relay sub message with the ephemeral session keys of all intermediate hops on the route to the packet's destination peer.
 
 #### `RelayTunnelExtend`
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  TUNNEL RELAY  |    EXTEND     |             Size             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Digest (8 byte)                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|        Encrypted Diffie Hellman Public Key  (32 byte)         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    Reserved / Padding        |V|     Next Hop Onion Port      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    Next Hop IP Address (IPv4 - 32 bits, IPv6 - 128 bits)      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+Relay sub protocol message to instruct a hop in the tunnel to extend the tunnel to the peer given by next hop IP address and next hop onion port.
+The flag `V` is set to 0 for an IPv4 address as the next hop IP address and to 1 for an IPv6 address.
+The encrypted diffie hellman public key will then be packed into a `TunnelCreate` message to initiate a handshake with the next hop.
 
 #### `RelayTunnelExtended`
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  TUNNEL RELAY  |   EXTENDED    |             Size             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Digest (8 byte)                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|              Diffie Hellman Public Key  (32 byte)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                  DH shared key hash (32 byte)                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+Relays the created message from the next hop back to the original sender of the `TunnelExtend` message.
 
 #### `RelayTunnelData`
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  TUNNEL RELAY  |     DATA      |             Size             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Digest (8 byte)                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          Data Payload                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
+Relay sub protocol message to finally pass normal data payload along the constructed tunnels.
 
 
 ### Protocol Flow
