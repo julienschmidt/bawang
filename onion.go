@@ -96,7 +96,7 @@ func (link *Link) destroy() (err error) {
 	return
 }
 
-func (link *Link) Send(msg message.Message) (err error) {
+func (link *Link) Send(tunnelID uint32, msg p2p.Message) (err error) {
 	data := link.msgBuf[:]
 	n, err := p2p.PackMessage(data, tunnelID, msg)
 	if err != nil {
@@ -157,9 +157,8 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 		log.Printf("Error generating diffie hellman keys: %v", err)
 		return
 	}
-	onionCreate := &message.OnionPeerCreate{
-		DHPubkey: *pub,
-		TunnelID: firstHop.TunnelID,
+	onionCreate := &p2p.TunnelCreate{
+		DHPubKey: *pub,
 	}
 
 	circuit.linkData = make(chan []byte, 10)
@@ -168,7 +167,7 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 		fmt.Printf("Failed to open receive data channel to link: %v", err)
 		return
 	}
-	err = link.Send(onionCreate)
+	err = link.Send(firstHop.TunnelID, onionCreate)
 	if err != nil {
 		fmt.Printf("Failed to send OnionCreate to peer: %v", err)
 		return
@@ -177,7 +176,7 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 	// TODO: deal with terminating channel
 	var response []byte
 	select {
-	case response = <-circuit.linkData:
+	case response = <-tun.linkData:
 		break
 	case <-time.After(time.Duration(cfg.BuildTimeout) * time.Second):
 		err = errTimedOut
@@ -201,7 +200,7 @@ func (circuit *Circuit) BuildCircuit(cfg *Config) (err error) {
 	}
 
 	firstHop.DHShared = new([32]byte)
-	box.Precompute(firstHop.DHShared, &onionCreated.DHPubkey, priv)
+	box.Precompute(firstHop.DHShared, &onionCreated.DHPubKey, priv)
 
 	return
 }
