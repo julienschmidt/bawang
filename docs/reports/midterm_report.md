@@ -294,10 +294,10 @@ Relay sub protocol message to finally pass normal data payload along the constru
      |                                                                      | TUNNEL CREATE (ID2, g^x2)             |
      |                                                                      |-------------------------------------->|
      |                                                                      |                                       |
-     |                                                                      |    TUNNEL CREATED (ID2, g^y2, H(K2))  |
+     |                                                                      |     TUNNEL CREATED (ID2, g^y2, H(K2)) |
      |                                                                      |<--------------------------------------|
      |                                                                      |                                       |
-     |                            TUNNEL EXTENDED (ID1, E_K1(g^y2, H(K2)))  |                                       |
+     |                             TUNNEL EXTENDED (ID1, E_K1(g^y2, H(K2))) |                                       |
      |<---------------------------------------------------------------------|                                       |
      |                                                                      |                                       |
 ~~~
@@ -341,7 +341,7 @@ In the above diagram `H()` denotes a secure hash function and `E_abc()` encrypti
      |                                                            |   TUNNEL RELAY (ID2, E_k2(E_dst(relay_meta, reply))) |                                                   |
      |                                                            |<-----------------------------------------------------|                                                   |
      |                                                            |                                                      |                                                   |
-     |    TUNNEL RELAY (ID1, E_k1(E_k2(E_dst(relay_meta, reply)))) |                                                      |                                                   |
+     |   TUNNEL RELAY (ID1, E_k1(E_k2(E_dst(relay_meta, reply)))) |                                                      |                                                   |
      |<-----------------------------------------------------------|                                                      |                                                   |
      |                                                            |                                                      |                                                   |
 ~~~
