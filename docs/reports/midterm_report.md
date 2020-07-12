@@ -16,10 +16,10 @@ Tunnel: End-to-end onion connection consisting of multiple hops.
 Since Go does not have classes, the main approach to structure a Go project is to group corresponding features/functions in files or sub modules.
 Implementation of data processing and handling is mainly done by using structs and methods on these structs.
 
-All code that handles protocol messages (parsing and packing) for both our onion protocol and the voidphone API protocol is grouped in the submodule `message`.
+All code that handles protocol messages (parsing and packing) for both our onion protocol and the VoidPhone API protocol is grouped in the submodule `message`.
 We defined a general `Message` interface that is implemented for each message type handling byte packing and unpacking.
 
-Currently, all logic handling our onion protocol is implemented in `onion.go` storing connection and peer data in different structs (`Link`, `Peer`, `Circuit`). We might move this logic to a different submodule.
+Currently, all logic handling our onion protocol is implemented in `onion.go` storing connection and peer data in different structs (`Link`, `Peer`, `Tunnel`). We might move this logic to a different submodule.
 
 Config parsing and option storing is implemented in `config.go` which exposes a struct (`Config`) containing all configuration parameters.
 
@@ -28,15 +28,15 @@ Communication with the RPS module API is implemented in `rps.go` exposing a simp
 The main entry point of our module is `bawang.go`, which will start both the API listen socket and our onion listen socket.
 
 ### Process Architecture
-We mainly make use of goroutines for parallelization. Each incoming/outgoing onion API or voidphone API connection will start a goroutine to handle messages from connected peer.
+We mainly make use of goroutines for parallelization. Each incoming/outgoing onion API or VoidPhone API connection will start a goroutine to handle messages from connected peer.
 
-Additionally, our two network sockets listeners (voidphone API, onion API) are started in a goroutine each.
+Additionally, our two network sockets listeners (VoidPhone API, onion API) are started in a goroutine each.
 
 ### Networking
 For network layer operations we use standard Go library functions for TLS and TCP connection handling.
 
 ### Security Measures
-We use two layers of authentication and encryption in our onion protocol.
+We use two layers of authentication and encryption in our P2P protocol.
 Connections between hops in our onion circuits are formed by TLS connections using the peer key as server certificate for authentication.
 On top of this link layer we perform authenticated Diffie-Hellman handshakes in our onion protocol to generate symmetric keys for our onion layer encryption.
 
@@ -106,7 +106,7 @@ OnionTunnelCreated is the response sent from peer B to peer A to confirm the cre
 ~~~
 To build an onion tunnel we initially generate a diffie hellman key pair with public key `g^x1`.
 We encrypt our public key using the identifier public key (host key, `h1p`) of the next hop in our tunnel and send it to said hop.
-The next hop in turn generates a diffie hellman key pair and computes the shared diffie hellman key. 
+The next hop in turn generates a diffie hellman key pair and computes the shared diffie hellman key.
 To perform unilateral authentication the next hop hashes the computed shared diffie hellman key and sends it along with its diffie hellman public key back to us.
 We then also compute the diffie hellman shared key and verify the hash Hop1 sent to us.
 If the hash is valid Hop1 has proven its identity by being able to decrypt our diffie hellman public key using its corresponding hop identifier private key.
@@ -145,7 +145,7 @@ In the above diagram `H()` denotes a secure hash function and `E_abc()` encrypti
      |<-----------------------------------------------------------|                                                      |                                                   |
      |                                                            |                                                      |                                                   |
 ~~~
-To pass data (or commands) along the tunnel we construct a `TunnelRelay` (or other relay sub protocol messages) message containing our data payload. 
+To pass data (or commands) along the tunnel we construct a `TunnelRelay` (or other relay sub protocol messages) message containing our data payload.
 After computing the message digest and embedding it in the message we then encrypt it iteratively using the ephemeral session keys shared with each hop.
 When passing the message through the tunnel each hop first decrypts the relay sub protocol part of the message using its session key.
 It then checks whether the decrypted digest matches the received message.
@@ -161,10 +161,10 @@ TODO error handling definitions
 
 - timeout when establishing a tunnel
 
-#### Network errors on voidphone API
+#### Network errors on VoidPhone API
 
-#### Data errors on voidpohone API
-If we receive invalid or malformed data from other voidphone components via the API we immediately terminate the connection.
+#### Data errors on VoidPhone API
+If we receive invalid or malformed data from other VoidPhone components via the API we immediately terminate the connection.
 
 #### Network errors on link layer
 In case of errors on our onion link layer
@@ -174,7 +174,7 @@ In case of errors on our onion link layer
 ## Future Work
 - Finish final implementation of our onion protocol
 - Integrate onion protocol functions with the API layer
-- Fully integrate the voidphone_testing library into our continuous integration testing
+- Fully integrate the `voidphone_testing` library into our continuous integration testing
 - Potentially different underlying network protocols (QUIC / unreliable UDP in addition to TCP)
 
 ## Workload Distribution - Who did what
