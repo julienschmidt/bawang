@@ -384,8 +384,6 @@ ML: Michael Loipführer, JS: Julien Schmidt
 
 
 ## Effort Spent
-? (individual effort)
 
-Michael Loipführer: TODO
+We mainly worked together intensively on the project on three weekends (23./24. May, 06./07. June, 10./11. July) and independently on some additional days. So far, we believe that we both spent enough effort on the project and that the workload was fairly distributed.
 
-Julien Schmidt: TODO
