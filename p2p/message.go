@@ -26,7 +26,6 @@ type Message interface {
 type Header struct {
 	TunnelID uint32
 	Type     Type
-	//Size     uint16 // TODO: where to put message length?
 }
 
 func (hdr *Header) Parse(data []byte) (err error) {
@@ -48,7 +47,7 @@ func (hdr *Header) Read(rd io.Reader) (err error) {
 	}
 
 	hdr.TunnelID = binary.BigEndian.Uint32(header[0:])
-	hdr.Type = Type(binary.BigEndian.Uint16(header[4:6]))
+	hdr.Type = Type(header[4])
 	return
 }
 

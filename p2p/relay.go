@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	//"encoding/binary"
 	"encoding/binary"
 	"net"
 )
@@ -30,11 +29,11 @@ func (hdr *RelayHeader) Parse(data []byte) (err error) {
 	return
 }
 
-func DecryptRelay(buf []byte, msg []byte, key *[32]byte) (ok bool, err error) {
+func DecryptRelay(buf, msg []byte, key *[32]byte) (ok bool, err error) {
 	return false, nil
 }
 
-func EncryptRelay(buf []byte, packedMsg []byte, key *[32]byte) (err error) {
+func EncryptRelay(buf, packedMsg []byte, key *[32]byte) (err error) {
 	return nil
 }
 
