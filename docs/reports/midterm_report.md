@@ -177,7 +177,7 @@ Depending on whether the digest ist valid the hop then forwards the full `Tunnel
 For more details consult the section on protocol flow.
 
 
-#### `Relay Sub Protocol Header`
+#### Relay Sub Protocol Header
 
 ~~~ascii
  0                   1                   2                   3
