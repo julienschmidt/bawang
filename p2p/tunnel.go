@@ -1,5 +1,9 @@
 package p2p
 
+import (
+	"net"
+)
+
 // TunnelCreate commands a peer to create a tunnel to a given peer.
 type TunnelCreate struct {
 	Version     uint8
