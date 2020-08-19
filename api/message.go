@@ -90,7 +90,7 @@ func WriteMessage(wr *bufio.Writer, msg Message) (err error) {
 	return
 }
 
-func readIP(ipv6 bool, data []byte) net.IP {
+func ReadIP(ipv6 bool, data []byte) net.IP {
 	if ipv6 {
 		return net.IP{
 			data[15], data[14], data[13], data[12],

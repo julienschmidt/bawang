@@ -12,7 +12,7 @@ func (msg *TunnelCreate) Type() Type {
 }
 
 func (msg *TunnelCreate) Parse(data []byte) (err error) {
-	const size = 1 + 1 + 32
+	const size = 1 + 1 + 2 + 32
 	if len(data) != size {
 		return ErrInvalidMessage
 	}
@@ -21,13 +21,13 @@ func (msg *TunnelCreate) Parse(data []byte) (err error) {
 
 	// 1 byte reserved
 
-	copy(msg.DHPubKey[0:32], data[2:34])
+	copy(msg.DHPubKey[0:32], data[3:35])
 
 	return
 }
 
 func (msg *TunnelCreate) PackedSize() (n int) {
-	return 1 + 1 + 32
+	return 1 + 1 + 2 + 32
 }
 
 func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
@@ -39,8 +39,9 @@ func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
 
 	buf[0] = msg.Version
 	buf[1] = 0x00 // reserved
+	buf[2] = 0x00 // reserved
 
-	copy(buf[2:34], msg.DHPubKey[0:32])
+	copy(buf[3:35], msg.DHPubKey[0:32])
 
 	return n, nil
 }
@@ -55,19 +56,19 @@ func (msg *TunnelCreated) Type() Type {
 }
 
 func (msg *TunnelCreated) Parse(data []byte) (err error) {
-	const size = 32 + 32
+	const size = 3 + 32 + 32
 	if len(data) != size {
 		return ErrInvalidMessage
 	}
 
-	copy(msg.DHPubKey[0:32], data[0:32])
-	copy(msg.SharedKeyHash[0:32], data[32:64])
+	copy(msg.DHPubKey[0:32], data[3:35])
+	copy(msg.SharedKeyHash[0:32], data[35:67])
 
 	return
 }
 
 func (msg *TunnelCreated) PackedSize() (n int) {
-	return 32 + 32
+	return 3 + 32 + 32
 }
 
 func (msg *TunnelCreated) Pack(buf []byte) (n int, err error) {
@@ -77,8 +78,8 @@ func (msg *TunnelCreated) Pack(buf []byte) (n int, err error) {
 	}
 	buf = buf[0:n]
 
-	copy(buf[0:32], msg.DHPubKey[0:32])
-	copy(buf[32:64], msg.SharedKeyHash[0:32])
+	copy(buf[3:35], msg.DHPubKey[0:32])
+	copy(buf[35:67], msg.SharedKeyHash[0:32])
 
 	return n, nil
 }
@@ -92,7 +93,7 @@ func (msg *TunnelDestroy) Type() Type {
 }
 
 func (msg *TunnelDestroy) Parse(data []byte) (err error) {
-	const size = 0
+	const size = 3 // padding
 	if len(data) != size {
 		return ErrInvalidMessage
 	}
@@ -101,10 +102,16 @@ func (msg *TunnelDestroy) Parse(data []byte) (err error) {
 }
 
 func (msg *TunnelDestroy) PackedSize() (n int) {
-	return 0
+	return 3
 }
 
 func (msg *TunnelDestroy) Pack(buf []byte) (n int, err error) {
+	n = msg.PackedSize()
+	if cap(buf) < n {
+		return -1, ErrBufferTooSmall
+	}
+	copy(buf[0:3], []byte{0x00, 0x00, 0x00}) // padding
+
 	return n, nil
 }
 
@@ -118,12 +125,11 @@ func (msg *TunnelRelay) Type() Type {
 
 func (msg *TunnelRelay) Parse(data []byte) (err error) {
 	const minSize = RelayHeaderSize
-	if len(data) != minSize {
+	if len(data) < minSize || len(data) > MaxRelayDataSize {
 		return ErrInvalidMessage
 	}
 
-	// TODO: actual parsing
-
+	copy(msg.EncData[:len(data)], data)
 	return
 }
 
@@ -132,9 +138,11 @@ func (msg *TunnelRelay) PackedSize() (n int) {
 }
 
 func (msg *TunnelRelay) Pack(buf []byte) (n int, err error) {
-	// TODO: actual packing
-
 	n = msg.PackedSize()
+	if cap(buf) < n {
+		return -1, ErrBufferTooSmall
+	}
+	copy(buf[:n], msg.EncData[:])
 
 	return n, nil
 }

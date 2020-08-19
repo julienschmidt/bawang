@@ -32,9 +32,9 @@ func (msg *OnionTunnelBuild) Parse(data []byte) (err error) {
 		if len(data) < keyOffset {
 			return ErrInvalidMessage
 		}
-		msg.Address = readIP(true, data[4:])
+		msg.Address = ReadIP(true, data[4:])
 	} else {
-		msg.Address = readIP(false, data[4:])
+		msg.Address = ReadIP(false, data[4:])
 	}
 
 	// must make a copy!

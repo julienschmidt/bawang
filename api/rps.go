@@ -69,10 +69,10 @@ func (msg *RPSPeer) Parse(data []byte) (err error) {
 
 	// read IP address (either 4 bytes if IPv4 or 16 bytes if IPv6)
 	if msg.IPv6 {
-		msg.Address = readIP(true, data[offset:])
+		msg.Address = ReadIP(true, data[offset:])
 		offset += 16
 	} else {
-		msg.Address = readIP(false, data[offset:])
+		msg.Address = ReadIP(false, data[offset:])
 		offset += 4
 	}
 
