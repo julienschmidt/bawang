@@ -2,32 +2,48 @@ package p2p
 
 import (
 	"bawang/api"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
 	"net"
 )
 
 const (
-	RelayHeaderSize  = 1 + 8 + 2
+	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8
 	MaxRelayDataSize = MaxSize - HeaderSize - RelayHeaderSize
 )
 
 // RelayHeader is the header of a relay sub protocol protocol cell
+//  0                   1                   2                   3
+//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |                           Tunnel ID                           |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |  TUNNEL RELAY |                   Counter                     |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |   Relay Type  |             Size              |    Reserved   |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |                       Digest (8 byte)                         |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 type RelayHeader struct {
+	Counter   [3]byte
 	RelayType RelayType
 	Size      uint16
 	Digest    [8]byte
 }
 
 func (hdr *RelayHeader) Parse(data []byte) (err error) {
-	if len(data) < HeaderSize {
+	if len(data) < RelayHeaderSize {
 		err = ErrInvalidMessage
 		return
 	}
-	digestOffset := 3
 
-	hdr.RelayType = RelayType(data[0])
-	hdr.Size = binary.BigEndian.Uint16(data[1:3])
+	copy(hdr.Counter[:], data[0:3])
+	digestOffset := 7
+
+	hdr.RelayType = RelayType(data[3])
+	hdr.Size = binary.BigEndian.Uint16(data[4:6])
 	copy(hdr.Digest[:], data[digestOffset:digestOffset+8])
 	return
 }
@@ -37,30 +53,102 @@ func (hdr *RelayHeader) Pack(buf []byte) (err error) {
 		err = ErrBufferTooSmall
 		return
 	}
-	buf[0] = byte(hdr.RelayType)
-	binary.BigEndian.PutUint16(buf[2:4], hdr.Size)
+	copy(buf[0:3], hdr.Counter[:])
+	buf[3] = byte(hdr.RelayType)
+	binary.BigEndian.PutUint16(buf[4:6], hdr.Size)
 
-	digestOffset := 3
+	digestOffset := 7
 	copy(buf[digestOffset:digestOffset+8], hdr.Digest[:])
 
 	return
 }
 
-func (hdr *RelayHeader) ComputeDigest(msg []byte) (err error) {
-	digest := sha256.Sum256(msg)
+func (hdr *RelayHeader) ComputeDigest(msg []byte) {
+	copy(hdr.Digest[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) // initialize digest to zero
+	packedHdr := make([]byte, RelayHeaderSize)
+	fullMsg := append(packedHdr, msg...)
+
+	digest := sha256.Sum256(fullMsg)
 	for digest[0] != 0x00 && digest[1] != 0x00 {
-		digest = sha256.Sum256(msg)
+		digest = sha256.Sum256(fullMsg)
 	}
 	copy(hdr.Digest[:], digest[:8])
 	return
 }
 
-func DecryptRelay(buf, msg []byte, key *[32]byte) (ok bool, err error) {
-	return false, nil
+func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
+	if hdr.Digest[0] != 0x00 || hdr.Digest[1] != 0x00 {
+		return false
+	}
+
+	digest := make([]byte, 8)
+	copy(digest[:], hdr.Digest[:])
+	hdr.ComputeDigest(msg)
+
+	isOk := true
+	for i, v := range digest {
+		if v != hdr.Digest[i] {
+			isOk = false
+			break
+		}
+	}
+	copy(hdr.Digest[:], digest[:])
+
+	return isOk
 }
 
-func EncryptRelay(buf, packedMsg []byte, key *[32]byte) (err error) {
-	return nil
+func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
+	if len(encRelayMsg) > MaxRelayDataSize + RelayHeaderSize {
+		err = ErrInvalidMessage
+		return
+	}
+	// message starts with the relay message header, we get the counter from the first 3 bytes
+	counter := encRelayMsg[:3]
+	iv := make([]byte, aes.BlockSize)
+	fullDigest := sha256.Sum256(counter)
+	copy(iv[:], fullDigest[:aes.BlockSize])
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return
+	}
+
+	decMsg := make([]byte, len(encRelayMsg))
+	copy(decMsg[:3], counter)
+	stream := cipher.NewCTR(block, iv)
+	stream.XORKeyStream(decMsg[3:], encRelayMsg[3:])
+
+	hdr := RelayHeader{}
+	err = hdr.Parse(decMsg)
+	if err != nil {
+		return
+	}
+
+	ok = hdr.CheckDigest(decMsg[RelayHeaderSize:])
+	if ok {
+		msg = decMsg
+	}
+	return
+}
+
+func EncryptRelay(packedMsg []byte, key *[32]byte) (encMsg []byte, err error) {
+	counter := packedMsg[:3]
+	iv := make([]byte, aes.BlockSize)
+	fullCounterDigest := sha256.Sum256(counter)
+	copy(iv[:], fullCounterDigest[:aes.BlockSize])
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return
+	}
+
+	encMsg = make([]byte, len(packedMsg))
+	stream := cipher.NewCTR(block, iv)
+	stream.XORKeyStream(encMsg[3:], packedMsg[3:])
+
+	copy(encMsg[:3], counter)
+
+	return
 }
 
 type RelayMessage interface {
