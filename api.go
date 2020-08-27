@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bawang/onion"
 	"bufio"
 	"io"
 	"log"
@@ -83,7 +84,7 @@ func handleAPIConnection(conn net.Conn) {
 	}
 }
 
-func listenAPISocket(cfg *Config, errOut chan error, quit chan struct{}) {
+func listenAPISocket(cfg *onion.Config, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		errOut <- err

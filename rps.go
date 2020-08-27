@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bawang/onion"
 	"bufio"
 	"crypto/x509"
 	"errors"
@@ -18,7 +19,7 @@ var (
 )
 
 type rps struct {
-	cfg *Config
+	cfg *onion.Config
 
 	l      sync.Mutex // guards fields below
 	msgBuf [api.MaxSize]byte
@@ -26,7 +27,7 @@ type rps struct {
 	rd     *bufio.Reader
 }
 
-func NewRPS(cfg *Config) (r *rps, err error) {
+func NewRPS(cfg *onion.Config) (r *rps, err error) {
 	r = &rps{
 		cfg: cfg,
 	}
@@ -53,7 +54,7 @@ func (r *rps) Close() {
 	}
 }
 
-func (r *rps) getPeer() (peer Peer, err error) {
+func (r *rps) getPeer() (peer onion.Peer, err error) {
 	// concurrent IO not such a great idea
 	r.l.Lock()
 	defer r.l.Unlock()

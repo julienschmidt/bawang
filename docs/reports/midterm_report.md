@@ -208,6 +208,7 @@ Afterwards the sender iteratively encrypts the relay sub message with the epheme
 |     1 | EXTEND     |
 |     2 | EXTENDED   |
 |     3 | DATA       |
+|     4 | COVER      |
 
 
 #### `TUNNEL RELAY EXTEND`
@@ -279,6 +280,22 @@ Relays the created message from the next hop back to the original sender of the 
 ~~~
 
 Relay sub protocol message to finally pass normal data payload along the constructed tunnels.
+
+#### `TUNNEL RELAY COVER`
+
+~~~ascii
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Tunnel ID                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  TUNNEL RELAY |                   Counter                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     COVER     |             Size              |    Reserved   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Digest (8 byte)                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~~~
 
 
 ### Protocol Flow

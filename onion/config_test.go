@@ -1,4 +1,4 @@
-package main
+package onion
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const configFile = "config.conf"
+const configFile = "../config.conf"
 
 func TestConfigFromFile(t *testing.T) {
 	file, err := ioutil.TempFile("", "test_config")
@@ -23,7 +23,7 @@ func TestConfigFromFile(t *testing.T) {
 	// replace hostkey path
 	data = bytes.Replace(data,
 		[]byte(" hostkey.pem"),
-		[]byte(" .testing/hostkey.pem"),
+		[]byte(" ../.testing/hostkey.pem"),
 		1)
 
 	err = ioutil.WriteFile(file.Name(), data, 0600)

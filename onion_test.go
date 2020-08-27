@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bawang/onion"
+	"bawang/p2p"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -12,7 +14,7 @@ import (
 )
 
 func TestListenOnionSocket(t *testing.T) {
-	cfg := Config{
+	cfg := onion.Config{
 		P2PHostname:     "127.0.0.1",
 		P2PPort:         15000,
 		RPSAPIAddress:   "127.0.0.1:14001",
@@ -26,11 +28,12 @@ func TestListenOnionSocket(t *testing.T) {
 	hostKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	assert.Nil(t, err)
 	cfg.HostKey = hostKey
+	onjon := onion.Onion{}
 
 	errChan := make(chan error)
 	quitChan := make(chan struct{})
 
-	go ListenOnionSocket(&cfg, errChan, quitChan)
+	go ListenOnionSocket(&onjon, &cfg, errChan, quitChan)
 	time.Sleep(1 * time.Second) // annoyingly wait for the socket to fully start
 
 	tlsConfig := &tls.Config{
@@ -38,10 +41,20 @@ func TestListenOnionSocket(t *testing.T) {
 	}
 	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), tlsConfig)
 	assert.Nil(t, err)
-	err = conn.CloseWrite()
-	assert.Nil(t, err)
 
 	if conn != nil {
+		createMsg := p2p.TunnelCreate{
+			Version:     1,
+			EncDHPubKey: [32]byte{},
+		}
+		buf := make([]byte, p2p.MaxSize)
+		n, err := p2p.PackMessage(buf, 123, &createMsg)
+		n, err = conn.Write(buf[:n])
+		assert.Nil(t, err)
+		assert.Equal(t, 0, n)
+		err = conn.CloseWrite()
+		assert.Nil(t, err)
+
 		conn.Close()
 		close(quitChan)
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bawang/onion"
 	"flag"
 	"log"
 	"os"
@@ -12,7 +13,8 @@ func main() {
 	var configFilePath string
 	flag.StringVar(&configFilePath, "config", "config.conf", "Path to config file, default is config.conf")
 
-	var cfg Config
+	var cfg onion.Config
+	var onion onion.Onion
 	err := cfg.FromFile(configFilePath)
 	if err != nil {
 		log.Fatalf("Error loading config file: %v", err)
@@ -29,7 +31,7 @@ func main() {
 
 	errChanOnion := make(chan error)
 
-	go ListenOnionSocket(&cfg, errChanOnion, quitChan)
+	go ListenOnionSocket(&onion, &cfg, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)
 	go listenAPISocket(&cfg, errChanAPI, quitChan)

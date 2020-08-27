@@ -34,8 +34,8 @@ func (hdr *Header) Parse(data []byte) (err error) {
 		return
 	}
 
-	hdr.TunnelID = binary.BigEndian.Uint32(data)
-	hdr.Type = Type(binary.BigEndian.Uint16(data[4:6]))
+	hdr.TunnelID = binary.BigEndian.Uint32(data[:4])
+	hdr.Type = Type(data[4])
 	return
 }
 
@@ -46,14 +46,14 @@ func (hdr *Header) Read(rd io.Reader) (err error) {
 		return
 	}
 
-	hdr.TunnelID = binary.BigEndian.Uint32(header[0:])
+	hdr.TunnelID = binary.BigEndian.Uint32(header[:4])
 	hdr.Type = Type(header[4])
 	return
 }
 
 func (hdr *Header) Pack(buf []byte) {
 	binary.BigEndian.PutUint32(buf, hdr.TunnelID)
-	binary.BigEndian.PutUint16(buf[4:], uint16(hdr.Type))
+	buf[4] = uint8(hdr.Type)
 }
 
 func PackMessage(buf []byte, tunnelID uint32, msg Message) (n int, err error) {

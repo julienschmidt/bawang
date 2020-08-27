@@ -98,7 +98,7 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
-	if len(encRelayMsg) > MaxRelayDataSize + RelayHeaderSize {
+	if len(encRelayMsg) > MaxRelayDataSize+RelayHeaderSize {
 		err = ErrInvalidMessage
 		return
 	}
@@ -113,21 +113,18 @@ func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err e
 		return
 	}
 
-	decMsg := make([]byte, len(encRelayMsg))
-	copy(decMsg[:3], counter)
+	msg = make([]byte, len(encRelayMsg))
+	copy(msg[:3], counter)
 	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(decMsg[3:], encRelayMsg[3:])
+	stream.XORKeyStream(msg[3:], encRelayMsg[3:])
 
 	hdr := RelayHeader{}
-	err = hdr.Parse(decMsg)
+	err = hdr.Parse(msg)
 	if err != nil {
 		return
 	}
 
-	ok = hdr.CheckDigest(decMsg[RelayHeaderSize:])
-	if ok {
-		msg = decMsg
-	}
+	ok = hdr.CheckDigest(msg[RelayHeaderSize:])
 	return
 }
 
@@ -240,8 +237,8 @@ func (msg *RelayTunnelExtend) Pack(buf []byte) (n int, err error) {
 }
 
 type RelayTunnelExtended struct {
-	EncDHPubKey      [32]byte // encrypted pub key of next peer
-	EncSharedKeyHash [32]byte
+	DHPubKey      [32]byte // encrypted pub key of next peer
+	SharedKeyHash [32]byte
 }
 
 func (msg *RelayTunnelExtended) Type() RelayType {
@@ -254,8 +251,8 @@ func (msg *RelayTunnelExtended) Parse(data []byte) (err error) {
 		return ErrInvalidMessage
 	}
 
-	copy(msg.EncDHPubKey[:], data[:32])
-	copy(msg.EncSharedKeyHash[:], data[32:64])
+	copy(msg.DHPubKey[:], data[:32])
+	copy(msg.SharedKeyHash[:], data[32:64])
 
 	return
 }
@@ -272,8 +269,8 @@ func (msg *RelayTunnelExtended) Pack(buf []byte) (n int, err error) {
 	}
 	buf = buf[:n]
 
-	copy(buf[:32], msg.EncDHPubKey[:])
-	copy(buf[32:], msg.EncSharedKeyHash[:])
+	copy(buf[:32], msg.DHPubKey[:])
+	copy(buf[32:], msg.SharedKeyHash[:])
 
 	return
 }

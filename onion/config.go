@@ -1,4 +1,4 @@
-package main
+package onion
 
 import (
 	"crypto/rsa"
