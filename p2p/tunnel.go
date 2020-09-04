@@ -2,8 +2,8 @@ package p2p
 
 // TunnelCreate commands a peer to create a tunnel to a given peer.
 type TunnelCreate struct {
-	Version     uint8
-	Reserved    uint8
+	Version  uint8
+	Reserved uint8
 
 	// encrypted next hop Diffie-Hellman pub key used to derive the shared Diffie-Hellman session key
 	// encrypted with the next hops identifier public key for implicit authentication

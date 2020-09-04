@@ -69,7 +69,7 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 	certs := []tls.Certificate{cert}
 
 	tlsConfig := tls.Config{
-		Certificates: certs,
+		Certificates:       certs,
 		InsecureSkipVerify: true,
 	}
 	ln, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), &tlsConfig)
@@ -87,7 +87,7 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 		select {
 		case <-quit:
 			return
-		case goRoutineErr := <- goRoutineErrOut:
+		case goRoutineErr := <-goRoutineErrOut:
 			log.Printf("Error in goroutine: %v", goRoutineErr)
 		default:
 		}

@@ -17,6 +17,6 @@ const (
 	RelayTypeTunnelExtend   RelayType = 1
 	RelayTypeTunnelExtended RelayType = 2
 	RelayTypeTunnelData     RelayType = 3
-	RelayTypeTunnelCover     RelayType = 4
+	RelayTypeTunnelCover    RelayType = 4
 	// Tunnel reserved until 10
 )
