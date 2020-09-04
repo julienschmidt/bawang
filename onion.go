@@ -70,7 +70,7 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 
 	tlsConfig := tls.Config{
 		Certificates: certs,
-		//InsecureSkipVerify: true,
+		InsecureSkipVerify: true,
 	}
 	ln, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), &tlsConfig)
 	if err != nil {
@@ -81,10 +81,14 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 	defer ln.Close()
 	log.Printf("Onion Server Listening at %v:%v", cfg.P2PHostname, cfg.P2PPort)
 
+	goRoutineErrOut := make(chan error, 10)
+
 	for {
 		select {
 		case <-quit:
 			return
+		case goRoutineErr := <- goRoutineErrOut:
+			log.Printf("Error in goroutine: %v", goRoutineErr)
 		default:
 		}
 
@@ -95,7 +99,7 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 			log.Println("Error accepting client connection")
 			continue
 		}
-		log.Println("Received new connection")
+		defer conn.Close()
 
 		ip, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 		if err != nil {
@@ -109,8 +113,16 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 			continue
 		}
 
-		link := onion.NewLinkFromExistingConn(net.ParseIP(ip), uint16(portParsed), conn)
+		tlsConn, ok := conn.(*tls.Conn)
+		if !ok {
+			log.Printf("Invalid tls connection from peer %v:%v", ip, port)
+			continue
+		}
+
+		log.Printf("Received new connection from peer %v:%v", ip, port)
+
+		link := onion.NewLinkFromExistingConn(net.ParseIP(ip), uint16(portParsed), tlsConn)
 		onjon.Links = append(onjon.Links, link)
-		go link.HandleConnection(onjon, cfg, errOut)
+		go link.HandleConnection(onjon, cfg, goRoutineErrOut)
 	}
 }

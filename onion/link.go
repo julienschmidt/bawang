@@ -114,8 +114,6 @@ func NewLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *
 		dataOut: make(map[uint32]chan message),
 		Quit:    make(chan struct{}),
 	}
-	defer link.nc.Close()
-
 	return
 }
 
