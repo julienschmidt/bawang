@@ -1,5 +1,7 @@
 run:
   skip-dirs-use-default: true
+  skip-dirs:
+    - .go
 
 output:
   uniq-by-line: false
