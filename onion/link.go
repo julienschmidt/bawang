@@ -1,8 +1,6 @@
 package onion
 
 import (
-	"bawang/api"
-	"bawang/p2p"
 	"bufio"
 	"crypto/tls"
 	"errors"
@@ -13,6 +11,9 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"bawang/api"
+	"bawang/p2p"
 )
 
 var (

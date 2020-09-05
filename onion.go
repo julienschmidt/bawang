@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bawang/onion"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -12,6 +11,8 @@ import (
 	"math/big"
 	"net"
 	"strconv"
+
+	"bawang/onion"
 )
 
 func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error, quit chan struct{}) {

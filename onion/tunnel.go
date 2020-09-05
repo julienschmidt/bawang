@@ -1,13 +1,15 @@
 package onion
 
 import (
-	"bawang/p2p"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"errors"
-	"golang.org/x/crypto/nacl/box"
 	"net"
+
+	"golang.org/x/crypto/nacl/box"
+
+	"bawang/p2p"
 )
 
 var (

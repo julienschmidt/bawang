@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bawang/api"
-	"bawang/onion"
 	"bufio"
 	"io"
 	"log"
 	"net"
+
+	"bawang/api"
+	"bawang/onion"
 )
 
 func HandleAPIConnection(apiConn *api.Connection) {

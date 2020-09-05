@@ -1,17 +1,18 @@
 package main
 
 import (
-	"bawang/onion"
-	"bawang/p2p"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"bawang/onion"
+	"bawang/p2p"
 )
 
 func TestListenOnionSocket(t *testing.T) {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bawang/onion"
 	"bufio"
 	"crypto/x509"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"bawang/api"
+	"bawang/onion"
 )
 
 var (

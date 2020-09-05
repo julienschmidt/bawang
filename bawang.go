@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bawang/onion"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"bawang/onion"
 )
 
 func main() {
