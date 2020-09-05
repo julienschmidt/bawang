@@ -1,0 +1,141 @@
+run:
+  skip-dirs-use-default: true
+
+output:
+  uniq-by-line: false
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+
+    check-blank: false
+
+  exhaustive:
+    default-signifies-exhaustive: true
+
+  gocritic:
+    disabled-checks:
+      - sloppyReassign
+
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+
+    settings:
+      hugeParam:
+        sizeThreshold: 512
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    # comma-separated list of prefixes
+    local-prefixes: bawang
+
+  golint:
+    min-confidence: 0.8
+
+  govet:
+    check-shadowing: true
+
+    enable-all: true
+    # disable:
+    #   - shadow
+
+  misspell:
+    locale: US
+    # ignore-words:
+    #   - someword
+
+  nakedret:
+    max-func-lines: 10
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+
+  nolintlint:
+    # Enable to ensure that nolint directives are all used. Default is true.
+    allow-unused: false
+    # Disable to ensure that nolint directives don't have a leading space. Default is true.
+    allow-leading-space: false
+    # Exclude following linters from requiring an explanation.  Default is [].
+    # allow-no-explanation: []
+    # Enable to require an explanation of nonzero length after each nolint directive. Default is false.
+    require-explanation: true
+    # Enable to require nolint directives to mention the specific linter being suppressed. Default is false.
+    require-specific: true
+
+  rowserrcheck:
+    # packages:
+    #   - github.com/jmoiron/salt
+
+  unparam:
+    check-exported: false
+
+  unused:
+    check-exported: false
+    
+  whitespace:
+    multi-if: false   # Enforces newlines (or comments) after every multi-line if statement
+    multi-func: false # Enforces newlines (or comments) after every multi-line function signature
+
+linters:
+  enable:
+    - bodyclose
+    - deadcode
+    - errcheck
+    - exhaustive
+    - exportloopref
+    - gocritic
+    - gofmt
+    - goimports
+    - golint
+    - goprintffuncname
+    - gosec
+    - govet
+    - megacheck
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - prealloc
+    - rowserrcheck
+    - scopelint
+    - sqlclosecheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - varcheck
+    - whitespace
+
+issues:
+  exclude:
+    - commentedOutCode
+    - importShadow
+
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - errcheck
+        - funlen
+        - goconst
+        - gocyclo
+        - goerr113
+        - gosec
+        - lll
+        - noctx
+        - prealloc
+        - unparam
+
+    - linters:
+      - gosec
+      text: "G101:"
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

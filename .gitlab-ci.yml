@@ -27,5 +27,5 @@ lint:
   stage: test
   extends: .go-mod
   script:
-    - golangci-lint run --timeout=5m --enable goconst,golint,maligned,misspell,prealloc,stylecheck ./...
+    - golangci-lint run -c .golangci.yaml --sort-results
   allow_failure: true
