@@ -15,7 +15,7 @@ $ ./bawang -c <path to config file>
 ## Generating the hostkey
 
 ```sh
-$ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out hostkey.pem
+$ make hostkey
 ```
 
 ## Testing
@@ -23,5 +23,5 @@ $ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out hostkey.pem
 To run the complete test-suite (including formatting check and linters):
 
 ```sh
-$ ./make_me_sad.sh
+$ make me_sad
 ```

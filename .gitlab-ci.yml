@@ -16,16 +16,16 @@ test:
   stage: test
   extends: .go-mod
   script:
-    - go test -v -cover -covermode=count ./...
+    - make test
 
 gofmt:
   stage: test
   script:
-    - test -z "$(gofmt -d -s . | tee /dev/stderr)"
+    - make gofmt
 
 lint:
   stage: test
   extends: .go-mod
   script:
-    - golangci-lint run -c .golangci.yaml --sort-results ./...
+    - make lint
   allow_failure: true
