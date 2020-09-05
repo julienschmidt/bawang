@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestListenOnionSocket(t *testing.T) {
 	}
 
 	hostKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	cfg.HostKey = hostKey
 	onjon := onion.Onion{}
 
@@ -40,22 +41,21 @@ func TestListenOnionSocket(t *testing.T) {
 		InsecureSkipVerify: true, //nolint:gosec // no valid cert for this test
 	}
 	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), tlsConfig)
-	assert.Nil(t, err)
+	require.Nil(t, err)
+	require.NotNil(t, conn)
 
-	if conn != nil {
-		createMsg := p2p.TunnelCreate{
-			Version:     1,
-			EncDHPubKey: [32]byte{},
-		}
-		buf := make([]byte, p2p.MaxSize)
-		n, err := p2p.PackMessage(buf, 123, &createMsg)
-		n, err = conn.Write(buf[:n])
-		assert.Nil(t, err)
-		assert.Equal(t, createMsg.PackedSize() + p2p.HeaderSize, n)
-		err = conn.CloseWrite()
-		assert.Nil(t, err)
-
-		conn.Close()
-		close(quitChan)
+	createMsg := p2p.TunnelCreate{
+		Version:     1,
+		EncDHPubKey: [32]byte{},
 	}
+	buf := make([]byte, p2p.MaxSize)
+	n, err := p2p.PackMessage(buf, 123, &createMsg)
+	n, err = conn.Write(buf[:n])
+	require.Nil(t, err)
+	assert.Equal(t, createMsg.PackedSize()+p2p.HeaderSize, n)
+	err = conn.CloseWrite()
+	require.Nil(t, err)
+
+	conn.Close()
+	close(quitChan)
 }

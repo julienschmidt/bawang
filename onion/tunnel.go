@@ -64,10 +64,10 @@ func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *Config) (dhShared *[32]byte, 
 		}
 		return dhShared, response, err
 
-	} else {
-		err = ErrInvalidProtocolVersion
-		return
 	}
+
+	err = ErrInvalidProtocolVersion
+	return
 }
 
 func CreateMsgFromExtendMsg(msg p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {

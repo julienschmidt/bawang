@@ -1,6 +1,7 @@
 package onion
 
 import (
+	"bawang/api"
 	"bawang/p2p"
 	"bufio"
 	"crypto/tls"
@@ -15,7 +16,7 @@ import (
 )
 
 var (
-	ErrInvalidTunnel     = errors.New("invalid tunnel configuration")
+	ErrInvalidTunnel     = errors.New("invalid tunnel")
 	ErrTimedOut          = errors.New("timed out")
 	ErrAlreadyRegistered = errors.New("a listener is already registered for this tunnel ID")
 )
@@ -26,30 +27,71 @@ type message struct {
 }
 
 type Onion struct {
-	Links     []*Link
-	TunnelIDs []uint32
+	Links []*Link
+	// maps which api connections listen on which tunnels in addition to keeping track of existing tunnels
+	Tunnels map[uint32][]*api.Connection
+
+	APIConnections []*api.Connection
+}
+
+func (onion *Onion) SendMsgToAllAPI(msgType api.Type, msg api.Message) (err error) {
+	for _, apiConn := range onion.APIConnections {
+		sendError := apiConn.Send(msgType, msg) // TODO: how to handle errors here?
+		if sendError != nil {
+			sendError = apiConn.Terminate()
+			// TODO: should we terminate the api connection here, if so do we need to check
+			// TODO: the whole onion struct for that connection
+		}
+	}
+
+	return
+}
+
+func (onion *Onion) SendMsgToAPI(tunnelID uint32, msgType api.Type, msg api.Message) (err error) {
+	apiConns, ok := onion.Tunnels[tunnelID]
+	if !ok {
+		err = ErrInvalidTunnel
+		return
+	}
+	for _, apiConn := range apiConns {
+		sendError := apiConn.Send(msgType, msg) // TODO: how to handle errors here?
+		if sendError != nil {
+			sendError = apiConn.Terminate()
+			// TODO: should we terminate the api connection here, if so do we need to check
+			// TODO: the whole onion struct for that connection
+		}
+	}
+
+	return
 }
 
 func (onion *Onion) NewTunnelID() (tunnelID uint32) {
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	tunnelID = random.Uint32()
-	isUnique := true
 	for {
-		for _, id := range onion.TunnelIDs {
-			isUnique = isUnique && id == tunnelID
+		if _, ok := onion.Tunnels[tunnelID]; ok {
+			tunnelID = rand.Uint32() // non unique tunnel ID
+			continue
 		}
 
-		if isUnique {
-			break
-		}
-
-		tunnelID = rand.Uint32()
-		isUnique = true
+		onion.Tunnels[tunnelID] = make([]*api.Connection, 0)
+		break
 	}
 
-	onion.TunnelIDs = append(onion.TunnelIDs, tunnelID)
-
 	return
+}
+
+func (onion *Onion) RemoveTunnel(tunnelID uint32) {
+	if _, ok := onion.Tunnels[tunnelID]; !ok {
+		return
+	}
+
+	// TODO: send onion error to all API connections for this tunnel
+	//for _, apiConn := range onion.Tunnels[tunnelID] {
+	//	// do something with this
+	//}
+
+	delete(onion.Tunnels, tunnelID)
 }
 
 func (onion *Onion) GetLink(address net.IP, port uint16) (*Link, bool) {
@@ -147,7 +189,6 @@ func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 
 func (link *Link) unregister(tunnelID uint32) {
 	delete(link.dataOut, tunnelID)
-	return
 }
 
 func (link *Link) Destroy() (err error) {
@@ -155,7 +196,7 @@ func (link *Link) Destroy() (err error) {
 	return
 }
 
-func (link *Link) DestroyTunnel(tunnelID uint32) (err error) {
+func (link *Link) SendDestroyTunnel(tunnelID uint32) (err error) {
 	destroyMsg := p2p.TunnelDestroy{}
 	err = link.Send(tunnelID, &destroyMsg)
 	return
@@ -207,8 +248,8 @@ func (link *Link) HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, cfg *Config
 		errOut <- err
 		return
 	}
-	defer link.DestroyTunnel(tunnel.ID)
 	defer link.unregister(tunnel.ID)
+	defer onion.RemoveTunnel(tunnel.ID)
 
 	for {
 		select {
@@ -216,7 +257,7 @@ func (link *Link) HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, cfg *Config
 			hdr := msg.hdr
 			data := msg.payload
 			switch hdr.Type {
-			case p2p.TypeTunnelRelay: // TODO: reverse decrypt using all hop shared keys
+			case p2p.TypeTunnelRelay:
 				decryptedRelayMsg := data
 				for i, hop := range tunnel.Hops {
 					ok, decryptedRelayMsg, err := p2p.DecryptRelay(decryptedRelayMsg, hop.DHShared)
@@ -234,6 +275,20 @@ func (link *Link) HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, cfg *Config
 
 						switch relayHdr.RelayType {
 						case p2p.RelayTypeTunnelData: // TODO: do something with the data message
+							dataMsg := p2p.RelayTunnelData{}
+							err = dataMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
+							if err != nil {
+								errOut <- err
+								return
+							}
+
+							apiMessage := api.OnionTunnelData{
+								TunnelID: tunnel.ID,
+								Data:     dataMsg.Data,
+							}
+
+							err = onion.SendMsgToAPI(tunnel.ID, api.TypeOnionTunnelData, &apiMessage)
+							// TODO: figure out if we want to really do nothing here with that error
 						default:
 							err = p2p.ErrInvalidMessage
 							return
@@ -243,7 +298,10 @@ func (link *Link) HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, cfg *Config
 						return
 					}
 				}
-			case p2p.TypeTunnelDestroy: // TODO: implement
+			case p2p.TypeTunnelDestroy:
+				// since we are the end of the tunnel we don't need to pass the destroy message along we just need
+				// to gracefully tear down our tunnel
+
 			default: // since we assume the circuit to be fully built we cannot accept any other message
 				errOut <- p2p.ErrInvalidMessage
 				return
@@ -265,8 +323,9 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 		errOut <- err
 		return
 	}
-	defer link.DestroyTunnel(tunnel.PrevHopTunnelID)
 	defer link.unregister(tunnel.PrevHopTunnelID)
+	defer onion.RemoveTunnel(tunnel.PrevHopTunnelID)
+	defer onion.RemoveTunnel(tunnel.NextHopTunnelID)
 
 	for {
 		select {
@@ -289,7 +348,25 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 					}
 
 					switch relayHdr.RelayType {
-					case p2p.RelayTypeTunnelData: // TODO: do something with the data message
+					case p2p.RelayTypeTunnelData:
+						dataMsg := p2p.RelayTunnelData{}
+						err = dataMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
+						if err != nil {
+							errOut <- err
+							return
+						}
+
+						// we received a valid data packed
+						// TODO: check if this was the first data message on this tunnel, is so announce it to the API
+						// as tunnel incoming
+
+						apiMessage := api.OnionTunnelData{
+							TunnelID: tunnel.PrevHopTunnelID,
+							Data:     dataMsg.Data,
+						}
+
+						err = onion.SendMsgToAPI(tunnel.PrevHopTunnelID, api.TypeOnionTunnelData, &apiMessage)
+						// TODO: figure out if we want to really do nothing here with that error
 					case p2p.RelayTypeTunnelExtend: // this be quite interesting
 						extendMsg := p2p.RelayTunnelExtend{}
 						err = extendMsg.Parse(decryptedRelayMsg)
@@ -353,7 +430,8 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 						err = p2p.ErrInvalidMessage
 						return
 					}
-				} else {                           // relay message is not meant for us
+				} else {
+					// relay message is not meant for us
 					if tunnel.NextHopLink != nil { // simply pass it along with one layer of encryption removed
 						err = tunnel.NextHopLink.SendRaw(tunnel.NextHopTunnelID, p2p.TypeTunnelRelay, decryptedRelayMsg)
 						if err != nil {
@@ -367,7 +445,14 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 				}
 
 				return
-			case p2p.TypeTunnelDestroy: // TODO: implement
+			case p2p.TypeTunnelDestroy:
+				// we pass the destroy message along and tear down
+				// TODO: send onion error message to API here
+				err = tunnel.NextHopLink.SendDestroyTunnel(tunnel.NextHopTunnelID)
+				if err != nil {
+					errOut <- err
+				}
+				return
 			default: // any other message is illegal here
 				errOut <- p2p.ErrInvalidMessage
 				return
@@ -377,7 +462,12 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 			//data := msg.payload
 			switch hdr.Type {
 			case p2p.TypeTunnelRelay: // TODO: implement
-			case p2p.TypeTunnelDestroy: // TODO: implement
+			case p2p.TypeTunnelDestroy:
+				err = link.SendDestroyTunnel(tunnel.PrevHopTunnelID)
+				if err != nil {
+					errOut <- err
+				}
+				return
 			default: // any other message is illegal here
 				errOut <- p2p.ErrInvalidMessage
 				return
@@ -424,7 +514,8 @@ func (link *Link) HandleConnection(onion *Onion, cfg *Config, errOut chan error)
 		_, ok := link.dataOut[hdr.TunnelID]
 		if ok {
 			link.dataOut[hdr.TunnelID] <- message{hdr, data}
-		} else {                                  // we receive the first message on this link for a tunnel we do not know yet
+		} else {
+			// we receive the first message on this link for a tunnel we do not know yet
 			if hdr.Type != p2p.TypeTunnelCreate { // the first message for a new tunnel MUST be Tunnel Create
 				errOut <- p2p.ErrInvalidMessage
 				return

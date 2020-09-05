@@ -1,20 +1,19 @@
 package main
 
 import (
+	"bawang/api"
 	"bawang/onion"
 	"bufio"
 	"io"
 	"log"
 	"net"
-
-	"bawang/api"
 )
 
-func handleAPIConnection(conn net.Conn) {
-	defer conn.Close()
+func HandleAPIConnection(apiConn *api.Connection) {
+	defer apiConn.Conn.Close()
 
 	var msgBuf [api.MaxSize]byte
-	rd := bufio.NewReader(conn)
+	rd := bufio.NewReader(apiConn.Conn)
 
 	for {
 		// read the message header
@@ -84,7 +83,7 @@ func handleAPIConnection(conn net.Conn) {
 	}
 }
 
-func listenAPISocket(cfg *onion.Config, errOut chan error, quit chan struct{}) {
+func ListenAPISocket(cfg *onion.Config, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		errOut <- err
@@ -108,6 +107,10 @@ func listenAPISocket(cfg *onion.Config, errOut chan error, quit chan struct{}) {
 		}
 		log.Println("Received new connection")
 
-		go handleAPIConnection(conn)
+		apiConn := api.Connection{
+			Conn: conn,
+		}
+
+		go HandleAPIConnection(&apiConn)
 	}
 }

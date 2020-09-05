@@ -73,7 +73,6 @@ func (hdr *RelayHeader) ComputeDigest(msg []byte) {
 		digest = sha256.Sum256(fullMsg)
 	}
 	copy(hdr.Digest[:], digest[:8])
-	return
 }
 
 func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
@@ -275,8 +274,7 @@ func (msg *RelayTunnelExtended) Pack(buf []byte) (n int, err error) {
 	return
 }
 
-// RelayTunnelData is encrypted data
-// TODO: wrapped in a relay packet between hops
+// RelayTunnelData is application payload we receive
 type RelayTunnelData struct {
 	Data []byte
 }
@@ -286,7 +284,7 @@ func (msg *RelayTunnelData) Type() RelayType {
 }
 
 func (msg *RelayTunnelData) Parse(data []byte) (err error) {
-	// TODO
+	msg.Data = data // TODO: need to copy here?
 	return
 }
 
@@ -296,6 +294,12 @@ func (msg *RelayTunnelData) PackedSize() (n int) {
 }
 
 func (msg *RelayTunnelData) Pack(buf []byte) (n int, err error) {
-	// TODO
+	if len(buf) < len(msg.Data) {
+		err = ErrBufferTooSmall
+		return
+	}
+
+	copy(buf[:len(msg.Data)], msg.Data)
+	n = len(msg.Data)
 	return
 }

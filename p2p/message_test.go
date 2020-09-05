@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-
 func TestHeader(t *testing.T) {
 	data := []byte{1, 2, 3, 4, 5}
 	require.Equal(t, HeaderSize, len(data))
@@ -17,6 +16,6 @@ func TestHeader(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, Header{
 		TunnelID: 0x01020304,
-		Type: 0x05,
+		Type:     0x05,
 	}, hdr)
 }
