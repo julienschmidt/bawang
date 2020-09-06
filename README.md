@@ -25,3 +25,7 @@ To run the complete test-suite (including formatting check and linters):
 ```sh
 $ make me_sad
 ```
+
+## Protocol Specification
+
+See [docs/protocol.md](./docs/protocol.md).
