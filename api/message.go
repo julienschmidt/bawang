@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bufio"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -70,23 +69,23 @@ func PackMessage(buf []byte, msg Message) (n int, err error) {
 	return
 }
 
-func WriteMessage(wr *bufio.Writer, msg Message) (err error) {
-	msgSize := msg.PackedSize() + HeaderSize
-	buf := make([]byte, msgSize)
-	n, err := PackMessage(buf, msg)
-	if err != nil {
-		return err
-	}
-	if n != msgSize {
-		return ErrBufferTooSmall
-	}
+// func WriteMessage(wr *bufio.Writer, msg Message) (err error) {
+// 	msgSize := msg.PackedSize() + HeaderSize
+// 	buf := make([]byte, msgSize)
+// 	n, err := PackMessage(buf, msg)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if n != msgSize {
+// 		return ErrBufferTooSmall
+// 	}
 
-	n, err = wr.Write(buf)
-	if n != msgSize {
-		err = errors.New("did not send all bytes")
-	}
-	return err
-}
+// 	n, err = wr.Write(buf)
+// 	if n != msgSize {
+// 		err = errors.New("did not send all bytes")
+// 	}
+// 	return err
+// }
 
 func ReadIP(ipv6 bool, data []byte) net.IP {
 	if ipv6 {

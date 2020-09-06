@@ -42,6 +42,10 @@ func TestRPSPeer(t *testing.T) {
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
 
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
+
 	bytesAppTypeDHT := make([]byte, 2)
 	binary.BigEndian.PutUint16(bytesAppTypeDHT, uint16(AppTypeDHT))
 
@@ -77,6 +81,22 @@ func TestRPSPeer(t *testing.T) {
 		assert.Equal(t, data, buf[:n])
 	})
 
+	t.Run("IPv4InvalidPortMap", func(t *testing.T) {
+		data := []byte{
+			0, 1, 2, 0,
+			42, 42, 3, 4,
+			bytesAppTypeGossip[0], bytesAppTypeGossip[1], 5, 6,
+			7, 8, 9, 10,
+			11, 12, 13, 14,
+		}
+		err := msg.Parse(data)
+		require.Equal(t, ErrInvalidAppType, err)
+
+		buf := make([]byte, 4096)
+		_, err = msg.Pack(buf)
+		require.Equal(t, ErrInvalidAppType, err)
+	})
+
 	t.Run("IPv4PortMap", func(t *testing.T) {
 		data := []byte{
 			0, 1, 2, 0,
@@ -109,7 +129,7 @@ func TestRPSPeer(t *testing.T) {
 		assert.Equal(t, data, buf[:n])
 	})
 
-	t.Run("IPv6", func(t *testing.T) {
+	t.Run("IPv6Valid", func(t *testing.T) {
 		data := []byte{
 			0, 1, 2, 0 | flagIPv6,
 			bytesAppTypeNSE[0], bytesAppTypeNSE[1], 3, 4,
@@ -139,5 +159,16 @@ func TestRPSPeer(t *testing.T) {
 		require.Nil(t, err)
 		require.Equal(t, len(data), n)
 		assert.Equal(t, data, buf[:n])
+	})
+
+	t.Run("IPv6Short", func(t *testing.T) {
+		data := []byte{
+			0, 1, 2, 0 | flagIPv6,
+			bytesAppTypeNSE[0], bytesAppTypeNSE[1], 3, 4,
+			bytesAppTypeOnion[0], bytesAppTypeOnion[1], 5, 6,
+			7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24, 25, 26,
+		}
+		err := msg.Parse(data)
+		require.Equal(t, ErrInvalidMessage, err)
 	})
 }

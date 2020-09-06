@@ -28,21 +28,52 @@ func TestOnionTunnelBuild(t *testing.T) {
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
 
-	data := []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	err := msg.Parse(data)
-	require.Nil(t, err)
-	require.Equal(t, OnionTunnelBuild{
-		IPv6:        false,
-		OnionPort:   0x102,
-		Address:     net.IP{0x6, 0x5, 0x4, 0x3},
-		DestHostKey: []byte{7, 8, 9},
-	}, *msg)
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
 
-	buf := make([]byte, 4096)
-	n, err := msg.Pack(buf)
-	require.Nil(t, err)
-	require.Equal(t, len(data), n)
-	assert.Equal(t, data, buf[:n])
+	t.Run("IPv4", func(t *testing.T) {
+		data := []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		err := msg.Parse(data)
+		require.Nil(t, err)
+		require.Equal(t, OnionTunnelBuild{
+			IPv6:        false,
+			OnionPort:   0x102,
+			Address:     net.IP{0x6, 0x5, 0x4, 0x3},
+			DestHostKey: []byte{7, 8, 9},
+		}, *msg)
+
+		buf := make([]byte, 4096)
+		n, err := msg.Pack(buf)
+		require.Nil(t, err)
+		require.Equal(t, len(data), n)
+		assert.Equal(t, data, buf[:n])
+	})
+
+	t.Run("IPv6Valid", func(t *testing.T) {
+		data := []byte{0, flagIPv6, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+			10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}
+		err := msg.Parse(data)
+		require.Nil(t, err)
+		require.Equal(t, OnionTunnelBuild{
+			IPv6:        true,
+			OnionPort:   0x102,
+			Address:     net.IP{0x12, 0x11, 0x010, 0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3},
+			DestHostKey: []byte{19, 20, 21},
+		}, *msg)
+
+		buf := make([]byte, 4096)
+		n, err := msg.Pack(buf)
+		require.Nil(t, err)
+		require.Equal(t, len(data), n)
+		assert.Equal(t, data, buf[:n])
+	})
+
+	t.Run("IPv6Short", func(t *testing.T) {
+		data := []byte{0, flagIPv6, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		err := msg.Parse(data)
+		require.Equal(t, ErrInvalidMessage, err)
+	})
 }
 
 func TestOnionTunnelReady(t *testing.T) {
@@ -53,6 +84,10 @@ func TestOnionTunnelReady(t *testing.T) {
 
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
+
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
 
 	data := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}
 	err := msg.Parse(data)
@@ -78,6 +113,10 @@ func TestOnionTunnelIncoming(t *testing.T) {
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
 
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
+
 	data := []byte{1, 2, 3, 4}
 	err := msg.Parse(data)
 	require.Nil(t, err)
@@ -101,6 +140,10 @@ func TestOnionTunnelDestroy(t *testing.T) {
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
 
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
+
 	data := []byte{1, 2, 3, 4}
 	err := msg.Parse(data)
 	require.Nil(t, err)
@@ -123,6 +166,10 @@ func TestOnionTunnelData(t *testing.T) {
 
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
+
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
 
 	data := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}
 	err := msg.Parse(data)
@@ -148,6 +195,10 @@ func TestOnionError(t *testing.T) {
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
 
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
+
 	data := []byte{1, 2, 0, 0, 3, 4, 5, 6}
 	err := msg.Parse(data)
 	require.Nil(t, err)
@@ -171,6 +222,10 @@ func TestOnionCover(t *testing.T) {
 
 	// empty data
 	assert.Equal(t, ErrInvalidMessage, msg.Parse([]byte{}))
+
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
 
 	data := []byte{1, 2, 0, 0}
 	err := msg.Parse(data)

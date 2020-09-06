@@ -61,7 +61,11 @@ func (msg *RPSPeer) Parse(data []byte) (err error) {
 	offset := 4
 	msg.PortMap = make(portMap, portMapLen)
 	for i := uint8(0); i < portMapLen; i++ {
-		msg.PortMap[i].app = AppType(binary.BigEndian.Uint16(data[offset:]))
+		at := AppType(binary.BigEndian.Uint16(data[offset:]))
+		if !at.valid() {
+			return ErrInvalidAppType
+		}
+		msg.PortMap[i].app = at
 		offset += 2
 		msg.PortMap[i].port = binary.BigEndian.Uint16(data[offset:])
 		offset += 2
