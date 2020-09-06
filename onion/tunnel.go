@@ -36,40 +36,37 @@ type TunnelSegment struct {
 	DHShared        *[32]byte // diffie hellman key shared with the previous hop
 }
 
-func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *Config) (dhShared *[32]byte, response p2p.TunnelCreated, err error) {
-	if msg.Version == 1 {
-		// decrypt the received dh pub key
-		label := []byte("dhshared")
-		decDHKey, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, cfg.HostKey, msg.EncDHPubKey[:], label)
-		if err != nil {
-			return nil, response, err
-		}
-
-		if len(decDHKey) != 32 {
-			err = ErrInvalidDHPublicKey
-			return nil, response, err
-		}
-
-		peerDHPub := new([32]byte)
-		copy(peerDHPub[:], decDHKey[:32])
-
-		pubDH, privDH, err := box.GenerateKey(rand.Reader)
-		if err != nil {
-			return nil, response, err
-		}
-		dhShared = new([32]byte)
-		box.Precompute(dhShared, peerDHPub, privDH)
-
-		response = p2p.TunnelCreated{
-			DHPubKey:      *pubDH,
-			SharedKeyHash: sha256.Sum256(dhShared[:32]),
-		}
-		return dhShared, response, err
-
+func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
+	if msg.Version != 1 {
+		return nil, nil, ErrInvalidProtocolVersion
 	}
 
-	err = ErrInvalidProtocolVersion
-	return
+	// decrypt the received dh pub key
+	label := []byte("dhshared")
+	decDHKey, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, cfg.HostKey, msg.EncDHPubKey[:], label)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(decDHKey) != 32 {
+		return nil, nil, ErrInvalidDHPublicKey
+	}
+
+	peerDHPub := new([32]byte)
+	copy(peerDHPub[:], decDHKey[:32])
+
+	pubDH, privDH, err := box.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	dhShared = new([32]byte)
+	box.Precompute(dhShared, peerDHPub, privDH)
+
+	response = &p2p.TunnelCreated{
+		DHPubKey:      *pubDH,
+		SharedKeyHash: sha256.Sum256(dhShared[:32]),
+	}
+	return dhShared, response, nil
 }
 
 func CreateMsgFromExtendMsg(msg p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {

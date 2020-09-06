@@ -71,7 +71,7 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 
 	tlsConfig := tls.Config{
 		Certificates:       certs,
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
 	}
 	ln, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), &tlsConfig)
 	if err != nil {
@@ -95,8 +95,8 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 
 		conn, err := ln.Accept()
 		if err != nil {
-			//errOut <- err
 			// TODO: error on client connection
+			// errOut <- err
 			log.Println("Error accepting client connection")
 			continue
 		}

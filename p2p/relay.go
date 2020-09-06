@@ -1,12 +1,13 @@
 package p2p
 
 import (
-	"bawang/api"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
 	"net"
+
+	"bawang/api"
 )
 
 const (
@@ -35,8 +36,7 @@ type RelayHeader struct {
 
 func (hdr *RelayHeader) Parse(data []byte) (err error) {
 	if len(data) < RelayHeaderSize {
-		err = ErrInvalidMessage
-		return
+		return ErrInvalidMessage
 	}
 
 	copy(hdr.Counter[:], data[0:3])
@@ -45,22 +45,22 @@ func (hdr *RelayHeader) Parse(data []byte) (err error) {
 	hdr.RelayType = RelayType(data[3])
 	hdr.Size = binary.BigEndian.Uint16(data[4:6])
 	copy(hdr.Digest[:], data[digestOffset:digestOffset+8])
-	return
+
+	return nil
 }
 
 func (hdr *RelayHeader) Pack(buf []byte) (err error) {
 	if cap(buf) < RelayHeaderSize {
-		err = ErrBufferTooSmall
-		return
+		return ErrBufferTooSmall
 	}
-	copy(buf[0:3], hdr.Counter[:])
+	copy(buf[:3], hdr.Counter[:])
 	buf[3] = byte(hdr.RelayType)
 	binary.BigEndian.PutUint16(buf[4:6], hdr.Size)
 
 	digestOffset := 7
 	copy(buf[digestOffset:digestOffset+8], hdr.Digest[:])
 
-	return
+	return nil
 }
 
 func (hdr *RelayHeader) ComputeDigest(msg []byte) {
@@ -81,7 +81,7 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	}
 
 	digest := make([]byte, 8)
-	copy(digest[:], hdr.Digest[:])
+	copy(digest, hdr.Digest[:])
 	hdr.ComputeDigest(msg)
 
 	isOk := true
@@ -91,25 +91,24 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 			break
 		}
 	}
-	copy(hdr.Digest[:], digest[:])
+	copy(hdr.Digest[:], digest)
 
 	return isOk
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
 	if len(encRelayMsg) > MaxRelayDataSize+RelayHeaderSize {
-		err = ErrInvalidMessage
-		return
+		return false, nil, ErrInvalidMessage
 	}
 	// message starts with the relay message header, we get the counter from the first 3 bytes
 	counter := encRelayMsg[:3]
 	iv := make([]byte, aes.BlockSize)
 	fullDigest := sha256.Sum256(counter)
-	copy(iv[:], fullDigest[:aes.BlockSize])
+	copy(iv, fullDigest[:aes.BlockSize])
 
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
-		return
+		return false, nil, err
 	}
 
 	msg = make([]byte, len(encRelayMsg))
@@ -120,22 +119,23 @@ func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err e
 	hdr := RelayHeader{}
 	err = hdr.Parse(msg)
 	if err != nil {
-		return
+		return false, nil, err
 	}
 
 	ok = hdr.CheckDigest(msg[RelayHeaderSize:])
-	return
+
+	return ok, msg, nil
 }
 
 func EncryptRelay(packedMsg []byte, key *[32]byte) (encMsg []byte, err error) {
 	counter := packedMsg[:3]
 	iv := make([]byte, aes.BlockSize)
 	fullCounterDigest := sha256.Sum256(counter)
-	copy(iv[:], fullCounterDigest[:aes.BlockSize])
+	copy(iv, fullCounterDigest[:aes.BlockSize])
 
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	encMsg = make([]byte, len(packedMsg))
@@ -144,7 +144,7 @@ func EncryptRelay(packedMsg []byte, key *[32]byte) (encMsg []byte, err error) {
 
 	copy(encMsg[:3], counter)
 
-	return
+	return encMsg, nil
 }
 
 type RelayMessage interface {
@@ -191,7 +191,7 @@ func (msg *RelayTunnelExtend) Parse(data []byte) (err error) {
 	// must make a copy!
 	copy(msg.EncDHPubKey[:], data[keyOffset:keyOffset+32])
 
-	return
+	return nil
 }
 
 func (msg *RelayTunnelExtend) PackedSize() (n int) {
@@ -199,7 +199,7 @@ func (msg *RelayTunnelExtend) PackedSize() (n int) {
 	if msg.IPv6 {
 		n += 12
 	}
-	return
+	return n
 }
 
 func (msg *RelayTunnelExtend) Pack(buf []byte) (n int, err error) {
@@ -271,7 +271,7 @@ func (msg *RelayTunnelExtended) Pack(buf []byte) (n int, err error) {
 	copy(buf[:32], msg.DHPubKey[:])
 	copy(buf[32:], msg.SharedKeyHash[:])
 
-	return
+	return n, nil
 }
 
 // RelayTunnelData is application payload we receive

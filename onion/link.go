@@ -40,19 +40,17 @@ func (onion *Onion) SendMsgToAllAPI(msgType api.Type, msg api.Message) (err erro
 		sendError := apiConn.Send(msgType, msg) // TODO: how to handle errors here?
 		if sendError != nil {
 			sendError = apiConn.Terminate()
-			// TODO: should we terminate the api connection here, if so do we need to check
-			// TODO: the whole onion struct for that connection
+			// TODO: should we terminate the api connection here, if so do we need to check the whole onion struct for that connection?
 		}
 	}
 
-	return
+	return nil
 }
 
 func (onion *Onion) SendMsgToAPI(tunnelID uint32, msgType api.Type, msg api.Message) (err error) {
 	apiConns, ok := onion.Tunnels[tunnelID]
 	if !ok {
-		err = ErrInvalidTunnel
-		return
+		return ErrInvalidTunnel
 	}
 	for _, apiConn := range apiConns {
 		sendError := apiConn.Send(msgType, msg) // TODO: how to handle errors here?
@@ -63,23 +61,24 @@ func (onion *Onion) SendMsgToAPI(tunnelID uint32, msgType api.Type, msg api.Mess
 		}
 	}
 
-	return
+	return nil
 }
 
 func (onion *Onion) NewTunnelID() (tunnelID uint32) {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	random := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // pseudo-rand is good enough. We just need uniqueness.
 	tunnelID = random.Uint32()
+	// ensure that tunnelID is unique
 	for {
 		if _, ok := onion.Tunnels[tunnelID]; ok {
-			tunnelID = rand.Uint32() // non unique tunnel ID
+			tunnelID = random.Uint32() // non unique tunnel ID
 			continue
 		}
-
-		onion.Tunnels[tunnelID] = make([]*api.Connection, 0)
 		break
 	}
 
-	return
+	onion.Tunnels[tunnelID] = make([]*api.Connection, 0)
+
+	return tunnelID
 }
 
 func (onion *Onion) RemoveTunnel(tunnelID uint32) {
@@ -88,9 +87,9 @@ func (onion *Onion) RemoveTunnel(tunnelID uint32) {
 	}
 
 	// TODO: send onion error to all API connections for this tunnel
-	//for _, apiConn := range onion.Tunnels[tunnelID] {
-	//	// do something with this
-	//}
+	// for _, apiConn := range onion.Tunnels[tunnelID] {
+	// 	// do something with this
+	// }
 
 	delete(onion.Tunnels, tunnelID)
 }
@@ -116,7 +115,7 @@ func (onion *Onion) GetOrCreateLink(address net.IP, port uint16) (link *Link, er
 	}
 
 	onion.Links = append(onion.Links, link)
-	return
+	return link, nil
 }
 
 type Link struct {
@@ -145,11 +144,11 @@ func NewLink(address net.IP, port uint16) (link *Link, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return
+	return link, nil
 }
 
 func NewLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *Link) {
-	link = &Link{
+	return &Link{
 		Address: address,
 		Port:    port,
 		nc:      conn,
@@ -157,7 +156,6 @@ func NewLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *
 		dataOut: make(map[uint32]chan message),
 		Quit:    make(chan struct{}),
 	}
-	return
 }
 
 func (link *Link) connect() (err error) {
@@ -174,18 +172,17 @@ func (link *Link) connect() (err error) {
 
 	link.rd = bufio.NewReader(link.nc)
 
-	return
+	return nil
 }
 
 func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 	_, ok := link.dataOut[tunnelID]
 	if ok {
-		err = ErrAlreadyRegistered
-		return
+		return ErrAlreadyRegistered
 	}
 
 	link.dataOut[tunnelID] = dataOut
-	return
+	return nil
 }
 
 func (link *Link) unregister(tunnelID uint32) {
@@ -205,8 +202,7 @@ func (link *Link) SendDestroyTunnel(tunnelID uint32) (err error) {
 
 func (link *Link) SendRaw(tunnelID uint32, msgType p2p.Type, msg []byte) (err error) {
 	if len(msg) > p2p.MaxSize-p2p.HeaderSize {
-		err = p2p.ErrInvalidMessage
-		return
+		return p2p.ErrInvalidMessage
 	}
 	data := link.msgBuf[:]
 	header := p2p.Header{TunnelID: tunnelID, Type: msgType}
@@ -216,28 +212,21 @@ func (link *Link) SendRaw(tunnelID uint32, msgType p2p.Type, msg []byte) (err er
 	link.l.Lock()
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
-	if err != nil {
-		return
-	}
-	return
+	return err
 }
 
 func (link *Link) Send(tunnelID uint32, msg p2p.Message) (err error) {
 	data := link.msgBuf[:]
 	n, err := p2p.PackMessage(data, tunnelID, msg)
 	if err != nil {
-		return
+		return err
 	}
 
 	data = data[:n]
 	link.l.Lock()
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
-	if err != nil {
-		return
-	}
-
-	return
+	return err
 }
 
 func (link *Link) HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, cfg *Config, errOut chan error) {
@@ -261,7 +250,8 @@ func (link *Link) HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, cfg *Config
 			case p2p.TypeTunnelRelay:
 				decryptedRelayMsg := data
 				for i, hop := range tunnel.Hops {
-					ok, decryptedRelayMsg, err := p2p.DecryptRelay(decryptedRelayMsg, hop.DHShared)
+					var ok bool
+					ok, decryptedRelayMsg, err = p2p.DecryptRelay(decryptedRelayMsg, hop.DHShared)
 					if err != nil { // error when decrypting
 						errOut <- err
 						return
@@ -335,7 +325,9 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 			data := msg.payload
 			switch hdr.Type {
 			case p2p.TypeTunnelRelay:
-				ok, decryptedRelayMsg, err := p2p.DecryptRelay(data, tunnel.DHShared)
+				var ok bool
+				var decryptedRelayMsg []byte
+				ok, decryptedRelayMsg, err = p2p.DecryptRelay(data, tunnel.DHShared)
 				if err != nil { // error when decrypting
 					errOut <- err
 					return
@@ -375,7 +367,8 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 							errOut <- err
 							return
 						}
-						nextLink, err := onion.GetOrCreateLink(extendMsg.Address, extendMsg.Port)
+						var nextLink *Link
+						nextLink, err = onion.GetOrCreateLink(extendMsg.Address, extendMsg.Port)
 						if err != nil {
 							errOut <- err
 							return
@@ -405,13 +398,15 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 
 							extendedMsg := ExtendedMsgFromCreatedMsg(createdMsg)
 							packedExtended := make([]byte, extendedMsg.PackedSize())
-							n, err := extendedMsg.Pack(packedExtended)
+							var n int
+							n, err = extendedMsg.Pack(packedExtended)
 							if err != nil {
 								errOut <- err
 								return
 							}
 
-							encryptedExtended, err := p2p.EncryptRelay(packedExtended[:n], tunnel.DHShared)
+							var encryptedExtended []byte
+							encryptedExtended, err = p2p.EncryptRelay(packedExtended[:n], tunnel.DHShared)
 							if err != nil {
 								errOut <- err
 								return
@@ -460,7 +455,7 @@ func (link *Link) HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *
 			}
 		case msg := <-dataChanNextHop: // we receive a message from the next hop
 			hdr := msg.hdr
-			//data := msg.payload
+			// data := msg.payload
 			switch hdr.Type {
 			case p2p.TypeTunnelRelay: // TODO: implement
 			case p2p.TypeTunnelDestroy:
@@ -539,7 +534,7 @@ func (link *Link) HandleConnection(onion *Onion, cfg *Config, errOut chan error)
 				PrevHopTunnelID: hdr.TunnelID,
 				DHShared:        dhShared,
 			}
-			err = link.Send(hdr.TunnelID, &tunnelCreated)
+			err = link.Send(hdr.TunnelID, tunnelCreated)
 			if err != nil {
 				errOut <- err
 				log.Printf("Error sending tunnel created message: %v", err)

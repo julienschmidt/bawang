@@ -51,6 +51,7 @@ func TestListenOnionSocket(t *testing.T) {
 	}
 	buf := make([]byte, p2p.MaxSize)
 	n, err := p2p.PackMessage(buf, 123, &createMsg)
+	require.Nil(t, err)
 	n, err = conn.Write(buf[:n])
 	require.Nil(t, err)
 	assert.Equal(t, createMsg.PackedSize()+p2p.HeaderSize, n)

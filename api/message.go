@@ -75,19 +75,17 @@ func WriteMessage(wr *bufio.Writer, msg Message) (err error) {
 	buf := make([]byte, msgSize)
 	n, err := PackMessage(buf, msg)
 	if err != nil {
-		return
+		return err
 	}
 	if n != msgSize {
-		err = ErrBufferTooSmall
-		return
+		return ErrBufferTooSmall
 	}
 
 	n, err = wr.Write(buf)
 	if n != msgSize {
 		err = errors.New("did not send all bytes")
 	}
-
-	return
+	return err
 }
 
 func ReadIP(ipv6 bool, data []byte) net.IP {

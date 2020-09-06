@@ -79,7 +79,7 @@ func (msg *RPSPeer) Parse(data []byte) (err error) {
 	// must make a copy!
 	msg.DestHostKey = append(msg.DestHostKey[0:0], data[offset:]...)
 
-	return
+	return nil
 }
 
 func (msg *RPSPeer) PackedSize() (n int) {
@@ -87,7 +87,7 @@ func (msg *RPSPeer) PackedSize() (n int) {
 	if msg.IPv6 {
 		n += 12
 	}
-	return
+	return n
 }
 
 func (msg *RPSPeer) Pack(buf []byte) (n int, err error) {

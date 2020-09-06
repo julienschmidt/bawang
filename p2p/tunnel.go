@@ -26,7 +26,7 @@ func (msg *TunnelCreate) Parse(data []byte) (err error) {
 
 	copy(msg.EncDHPubKey[:], data[3:35])
 
-	return
+	return nil
 }
 
 func (msg *TunnelCreate) PackedSize() (n int) {

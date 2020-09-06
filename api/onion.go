@@ -40,7 +40,7 @@ func (msg *OnionTunnelBuild) Parse(data []byte) (err error) {
 	// must make a copy!
 	msg.DestHostKey = append(msg.DestHostKey[0:0], data[keyOffset:]...)
 
-	return
+	return nil
 }
 
 func (msg *OnionTunnelBuild) PackedSize() (n int) {
