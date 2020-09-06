@@ -154,6 +154,8 @@ type RelayMessage interface {
 	PackedSize() (n int)
 }
 
+const flagIPv6 = 1
+
 // RelayTunnelExtend commands the addressed tunnel hop to extend the tunnel by another hop.
 type RelayTunnelExtend struct {
 	// TODO: encrypted DH key -> next hop creates TunnelCreate message from it
@@ -173,7 +175,7 @@ func (msg *RelayTunnelExtend) Parse(data []byte) (err error) {
 		return ErrInvalidMessage
 	}
 
-	msg.IPv6 = data[1]&1 > 0
+	msg.IPv6 = data[1]&flagIPv6 > 0
 	msg.Port = binary.BigEndian.Uint16(data[32+2 : 32+2+2])
 
 	// read IP address (either 4 bytes if IPv4 or 16 bytes if IPv6)
