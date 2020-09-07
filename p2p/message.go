@@ -59,8 +59,8 @@ func (hdr *Header) Pack(buf []byte) {
 func PackMessage(buf []byte, tunnelID uint32, msg Message) (n int, err error) {
 	n = msg.PackedSize() + HeaderSize
 	header := Header{tunnelID, msg.Type()}
-	header.Pack(buf)
-	n2, err := msg.Pack(buf[HeaderSize:])
+	header.Pack(buf[:HeaderSize])
+	n2, err := msg.Pack(buf[HeaderSize:n])
 	if n2+HeaderSize != n && err == nil {
 		return -1, ErrInvalidMessage
 	}

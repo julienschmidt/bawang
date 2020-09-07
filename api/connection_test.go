@@ -9,7 +9,7 @@ import (
 func TestConnectionSend(t *testing.T) {
 	// TODO: test for actual implementation
 	var conn Connection
-	err := conn.Send(TypeGossipAnnounce, nil)
+	err := conn.Send(nil)
 	require.Nil(t, err)
 }
 

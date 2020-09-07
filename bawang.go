@@ -15,7 +15,6 @@ func main() {
 	flag.StringVar(&configFilePath, "config", "config.conf", "Path to config file, default is config.conf")
 
 	var cfg onion.Config
-	var onjon onion.Onion
 	err := cfg.FromFile(configFilePath)
 	if err != nil {
 		log.Fatalf("Error loading config file: %v", err)
@@ -30,12 +29,13 @@ func main() {
 		close(quitChan)
 	}()
 
+	onjon := onion.Onion{}
 	errChanOnion := make(chan error)
 
 	go ListenOnionSocket(&onjon, &cfg, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)
-	go ListenAPISocket(&cfg, errChanAPI, quitChan)
+	go ListenAPISocket(&cfg, &onjon, errChanAPI, quitChan)
 
 	select {
 	case err = <-errChanOnion:

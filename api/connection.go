@@ -6,11 +6,24 @@ import (
 
 type Connection struct {
 	Conn net.Conn
+
+	msgBuf [MaxSize]byte
 }
 
-func (conn *Connection) Send(msgType Type, msg Message) (err error) {
+func (conn *Connection) Send(msg Message) (err error) {
 	// TODO: implement
-	return nil
+	n, err := PackMessage(conn.msgBuf[:], msg)
+	if err != nil {
+		return
+	}
+
+	data := conn.msgBuf[:n]
+	_, err = conn.Conn.Write(data)
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 func (conn *Connection) Terminate() (err error) {

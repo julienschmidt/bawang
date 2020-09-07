@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
+	"math/rand"
 	"net"
 
 	"bawang/api"
@@ -13,6 +14,7 @@ import (
 const (
 	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8
 	MaxRelayDataSize = MaxSize - HeaderSize - RelayHeaderSize
+	MaxRelaySize     = MaxSize - HeaderSize
 )
 
 // RelayHeader is the header of a relay sub protocol protocol cell
@@ -94,6 +96,35 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	copy(hdr.Digest[:], digest)
 
 	return isOk
+}
+
+func PackRelayMessage(buf []byte, currCounter uint64, msg RelayMessage) (n int, err error) {
+	n = msg.PackedSize() + RelayHeaderSize
+	if len(buf) < n {
+		return -1, ErrBufferTooSmall
+	}
+
+	// generate random counter, greater than the previous one
+	counter := currCounter + uint64(rand.Int63n(128))
+	byteCounter := make([]byte, 4)
+	binary.BigEndian.PutUint64(byteCounter, counter)
+	ctr := [3]byte{}
+	copy(ctr[:], byteCounter[:3])
+	header := RelayHeader{
+		Counter: ctr,
+		RelayType: msg.Type(),
+		Size: uint16(msg.PackedSize()+ RelayHeaderSize),
+	}
+
+	rand.Read(buf[RelayHeaderSize:n]) // initialize the full 512 - HeaderSize bytes of the messages with pseudo randomness
+	n2, err := msg.Pack(buf[RelayHeaderSize:])
+	if n2+RelayHeaderSize != n && err == nil {
+		return -1, ErrInvalidMessage
+	}
+	header.ComputeDigest(buf[RelayHeaderSize:])
+
+	err = header.Pack(buf[:RelayHeaderSize])
+	return
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
