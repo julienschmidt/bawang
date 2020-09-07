@@ -51,7 +51,6 @@ func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err
 func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader, decryptedRelayMsg []byte, ok bool, err error) {
 	decryptedRelayMsg = data
 	for _, hop := range tunnel.Hops {
-		var ok bool
 		ok, decryptedRelayMsg, err = p2p.DecryptRelay(decryptedRelayMsg, hop.DHShared)
 		if err != nil { // error when decrypting
 			return
@@ -70,8 +69,7 @@ func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader
 	}
 
 	// we could not decrypt the message and have removed all layers of encryption
-	err = p2p.ErrInvalidMessage
-	return
+	return relayHdr, nil, false, p2p.ErrInvalidMessage
 }
 
 type TunnelSegment struct {
@@ -271,7 +269,7 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 	for _, hop := range hops[1:] {
 		dhPriv, extendMsg, err := CreateTunnelExtend(hop.HostKey, hop.Address, hop.Port)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		n, err := p2p.PackRelayMessage(msgBuf, tunnel.Counter, extendMsg)
@@ -281,14 +279,14 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 		for j := len(tunnel.Hops) - 1; j > 1; j-- {
 			encMsg, err := p2p.EncryptRelay(packedMsg, tunnel.Hops[j].DHShared)
 			if err != nil {
-				return
+				return nil, err
 			}
 			packedMsg = encMsg
 		}
 
 		err = link.SendRaw(tunnelID, p2p.TypeTunnelRelay, packedMsg)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		// wait for the extended message
@@ -296,23 +294,23 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 		case extended := <-dataOut:
 			if extended.hdr.Type != p2p.TypeTunnelRelay {
 				err = p2p.ErrInvalidMessage
-				return
+				return nil, err
 			}
 
 			// decrypt the message
 			relayHdr, decryptedRelayMsg, ok, err := tunnel.DecryptRelayMessage(extended.payload)
 			if err != nil {
-				return
+				return nil, err
 			}
 			if !ok || relayHdr.RelayType != p2p.RelayTypeTunnelExtended {
 				err = ErrMisbehavingPeer
-				return
+				return nil, err
 			}
 
 			extendedMsg := p2p.RelayTunnelExtended{}
 			err = extendedMsg.Parse(decryptedRelayMsg)
 			if err != nil {
-				return
+				return nil, err
 			}
 
 			dhShared := new([32]byte)
@@ -321,8 +319,7 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 			// validate the shared key hash
 			sharedHash := sha256.Sum256(dhShared[:32])
 			if !bytes.Equal(sharedHash[:], extendedMsg.SharedKeyHash[:]) {
-				err = ErrMisbehavingPeer
-				return
+				return nil, ErrMisbehavingPeer
 			}
 
 			tunnel.Hops = append(tunnel.Hops, &Peer{
@@ -334,8 +331,7 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 
 			break
 		case <-time.After(time.Duration(cfg.CreateTimeout) * time.Second):
-			err = ErrTimedOut
-			return
+			return nil, ErrTimedOut
 		}
 	}
 
@@ -346,21 +342,21 @@ func (onion *Onion) SendData(tunnelID uint32, payload []byte) (err error) {
 	if tunnel, ok := onion.OutgoingTunnels[tunnelID]; ok {
 		encryptedMsg, err := tunnel.EncryptRelayMsg(payload)
 		if err != nil {
-			return
+			return err
 		}
 
 		err = tunnel.Link.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
 		if err != nil {
-			return
+			return err
 		}
 	} else if tunnelSegment, ok := onion.IncomingTunnels[tunnelID]; ok {
 		encryptedMsg, err := p2p.EncryptRelay(payload, tunnelSegment.DHShared)
 		if err != nil {
-			return
+			return err
 		}
 		err = tunnelSegment.PrevHopLink.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
 		if err != nil {
-			return
+			return err
 		}
 	}
 

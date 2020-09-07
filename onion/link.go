@@ -186,16 +186,14 @@ func HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, dataOut chan message, cf
 
 						err = onion.SendMsgToAPI(tunnel.ID, &apiMessage)
 						// TODO: figure out if we want to really do nothing here with that error
-						break
 					default:
-						err = p2p.ErrInvalidMessage
+						errOut <- p2p.ErrInvalidMessage
 						return
 					}
 
 				} else {
 					// TODO: decide what to do on an non-encryptable relay message
 				}
-				break
 			case p2p.TypeTunnelDestroy:
 				// since we are the end of the tunnel we don't need to pass the destroy message along we just need
 				// to gracefully tear down our tunnel
@@ -284,7 +282,6 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 						err = onion.SendMsgToAPI(tunnel.PrevHopTunnelID, &apiMessage)
 						// TODO: figure out if we want to really do nothing here with that error
 
-						break
 					case p2p.RelayTypeTunnelExtend: // this be quite interesting
 						extendMsg := p2p.RelayTunnelExtend{}
 						err = extendMsg.Parse(decryptedRelayMsg)
@@ -341,14 +338,12 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 								errOut <- err
 								return
 							}
-							break
 						case <-time.After(time.Duration(cfg.CreateTimeout) * time.Second): // timeout
 							errOut <- ErrTimedOut
 							return
 						}
 
 						// TODO: finish implementing
-						break
 					default:
 						err = p2p.ErrInvalidMessage
 						return
@@ -367,7 +362,6 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 					}
 				}
 
-				break
 			case p2p.TypeTunnelDestroy:
 				// we pass the destroy message along and tear down
 				// TODO: send onion error message to API here
@@ -380,7 +374,6 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 				errOut <- p2p.ErrInvalidMessage
 				return
 			}
-			break
 		case msg, channelOpen := <-dataChanNextHop: // we receive a message from the next hop
 			if !channelOpen {
 				return
@@ -399,7 +392,6 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 					errOut <- err
 					return
 				}
-				break
 			case p2p.TypeTunnelDestroy:
 				err = tunnel.PrevHopLink.SendDestroyTunnel(tunnel.PrevHopTunnelID)
 				if err != nil {
@@ -410,7 +402,6 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 				errOut <- p2p.ErrInvalidMessage
 				return
 			}
-			break
 		case <-tunnel.PrevHopLink.Quit:
 			if tunnel.NextHopLink != nil {
 				err = tunnel.NextHopLink.Destroy()
