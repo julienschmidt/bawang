@@ -59,6 +59,10 @@ func (hdr *Header) Pack(buf []byte) {
 }
 
 func PackMessage(buf []byte, msg Message) (n int, err error) {
+	if msg == nil {
+		return -1, ErrInvalidMessage
+	}
+
 	n = msg.PackedSize() + HeaderSize
 	header := Header{uint16(n), msg.Type()}
 	header.Pack(buf)

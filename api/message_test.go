@@ -113,5 +113,8 @@ func TestPackMessage(t *testing.T) {
 
 		_, err := PackMessage(buf[:], msg)
 		require.Equal(t, ErrInvalidMessage, err)
+
+		_, err = PackMessage(buf[:], nil)
+		require.Equal(t, ErrInvalidMessage, err)
 	})
 }
