@@ -111,9 +111,9 @@ func PackRelayMessage(buf []byte, currCounter uint64, msg RelayMessage) (n int, 
 	ctr := [3]byte{}
 	copy(ctr[:], byteCounter[:3])
 	header := RelayHeader{
-		Counter: ctr,
+		Counter:   ctr,
 		RelayType: msg.Type(),
-		Size: uint16(msg.PackedSize()+ RelayHeaderSize),
+		Size:      uint16(msg.PackedSize() + RelayHeaderSize),
 	}
 
 	rand.Read(buf[RelayHeaderSize:n]) // initialize the full 512 - HeaderSize bytes of the messages with pseudo randomness
@@ -124,7 +124,11 @@ func PackRelayMessage(buf []byte, currCounter uint64, msg RelayMessage) (n int, 
 	header.ComputeDigest(buf[RelayHeaderSize:])
 
 	err = header.Pack(buf[:RelayHeaderSize])
-	return
+	if err != nil {
+		return -1, err
+	}
+
+	return n, nil
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {

@@ -190,10 +190,10 @@ func HandleOutgoingTunnel(tunnel *Tunnel, onion *Onion, dataOut chan message, cf
 						errOut <- p2p.ErrInvalidMessage
 						return
 					}
-
-				} else {
-					// TODO: decide what to do on an non-encryptable relay message
 				}
+
+				// TODO: decide what to do on an non-encryptable relay message
+
 			case p2p.TypeTunnelDestroy:
 				// since we are the end of the tunnel we don't need to pass the destroy message along we just need
 				// to gracefully tear down our tunnel
@@ -345,7 +345,7 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 
 						// TODO: finish implementing
 					default:
-						err = p2p.ErrInvalidMessage
+						errOut <- p2p.ErrInvalidMessage
 						return
 					}
 				} else {
@@ -382,7 +382,8 @@ func HandleTunnelSegment(tunnel *TunnelSegment, onion *Onion, cfg *Config, errOu
 			data := msg.payload
 			switch hdr.Type {
 			case p2p.TypeTunnelRelay: // simply add one layer of encryption and pass it along
-				encryptedMsg, err := p2p.EncryptRelay(data, tunnel.DHShared)
+				var encryptedMsg []byte
+				encryptedMsg, err = p2p.EncryptRelay(data, tunnel.DHShared)
 				if err != nil {
 					errOut <- err
 					return

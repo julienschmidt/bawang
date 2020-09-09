@@ -24,7 +24,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 			if err == io.EOF {
 				return
 			}
-			log.Printf("Error reading message header: %v", err)
+			log.Printf("Error reading message header: %v\n", err)
 			return
 		}
 
@@ -32,7 +32,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 		data := msgBuf[:hdr.Size]
 		_, err = io.ReadFull(rd, data)
 		if err != nil {
-			log.Printf("Error reading message body: %v", err)
+			log.Printf("Error reading message body: %v\n", err)
 			return
 		}
 
@@ -42,7 +42,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 			var msg api.OnionTunnelBuild
 			err := msg.Parse(data)
 			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
+				log.Printf("Error parsing OnionTunnelBuild message body: %v\n", err)
 				continue
 			}
 			// TODO: some action
@@ -52,7 +52,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 			var msg api.OnionTunnelDestroy
 			err := msg.Parse(data)
 			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
+				log.Printf("Error parsing OnionTunnelDestroy message body: %v\n", err)
 				continue
 			}
 			// TODO: some action
@@ -62,7 +62,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 			var msg api.OnionTunnelData
 			err := msg.Parse(data)
 			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
+				log.Printf("Error parsing OnionTunnelData message body: %v\n", err)
 				continue
 			}
 			// TODO: some action
@@ -72,7 +72,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 			var msg api.OnionCover
 			err := msg.Parse(data)
 			if err != nil {
-				log.Printf("Error parsing message body: %v", err)
+				log.Printf("Error parsing OnionCover message body: %v\n", err)
 				continue
 			}
 			// TODO: some action
@@ -91,7 +91,7 @@ func ListenAPISocket(cfg *onion.Config, onjon *onion.Onion, errOut chan error, q
 		return
 	}
 	defer ln.Close()
-	log.Printf("API Server Listening at %v", cfg.OnionAPIAddress)
+	log.Printf("API Server Listening at %v\n", cfg.OnionAPIAddress)
 
 	for {
 		select {
@@ -103,7 +103,7 @@ func ListenAPISocket(cfg *onion.Config, onjon *onion.Onion, errOut chan error, q
 		conn, err := ln.Accept()
 		if err != nil {
 			// TODO: error on client connection
-			log.Println("Error accepting client connection")
+			log.Printf("Error accepting client connection: %v\n", err)
 			continue
 		}
 		log.Println("Received new connection")

@@ -14,16 +14,12 @@ func (conn *Connection) Send(msg Message) (err error) {
 	// TODO: implement
 	n, err := PackMessage(conn.msgBuf[:], msg)
 	if err != nil {
-		return
+		return err
 	}
 
 	data := conn.msgBuf[:n]
 	_, err = conn.Conn.Write(data)
-	if err != nil {
-		return
-	}
-
-	return
+	return err
 }
 
 func (conn *Connection) Terminate() (err error) {

@@ -54,7 +54,7 @@ func (r *rps) Close() {
 	}
 }
 
-func (r *rps) getPeer() (peer onion.Peer, err error) {
+func (r *rps) getPeer() (peer *onion.Peer, err error) {
 	// concurrent IO not such a great idea
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -64,28 +64,27 @@ func (r *rps) getPeer() (peer onion.Peer, err error) {
 	data := r.msgBuf[:]
 	n, err := api.PackMessage(data, &query)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	data = data[:n]
 	_, err = r.nc.Write(data)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	// read reply
 	replyDeadline := time.Now().Add(time.Duration(r.cfg.APITimeout) * time.Second)
 	err = r.nc.SetReadDeadline(replyDeadline)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var hdr api.Header
 	err = hdr.Read(r.rd)
 	if err != nil || hdr.Type != api.TypeRPSPeer {
 		log.Print("invalid or no message received from rps module")
-		err = api.ErrInvalidMessage
-		return
+		return nil, api.ErrInvalidMessage
 	}
 
 	var reply api.RPSPeer
@@ -93,19 +92,18 @@ func (r *rps) getPeer() (peer onion.Peer, err error) {
 	_, err = io.ReadFull(r.rd, data)
 	if err != nil {
 		log.Printf("Error reading message body: %v", err)
-		return
+		return nil, err
 	}
 
 	err = reply.Parse(data)
 	if err != nil {
 		log.Printf("Error parsing message body: %v", err)
-		return
+		return nil, err
 	}
 
 	port := reply.PortMap.Get(api.AppTypeOnion)
 	if port == 0 { // no Onion port
-		err = errInvalidPeer
-		return
+		return nil, errInvalidPeer
 	}
 
 	peer.Address = reply.Address
@@ -113,8 +111,8 @@ func (r *rps) getPeer() (peer onion.Peer, err error) {
 	peer.HostKey, err = x509.ParsePKCS1PublicKey(reply.DestHostKey) // TODO: verify
 	if err != nil {
 		log.Printf("Received peer with invalid host key from rps module: %v", err)
-		return
+		return nil, err
 	}
 
-	return
+	return peer, nil
 }

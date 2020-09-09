@@ -1,7 +1,6 @@
 package onion
 
 import (
-	"bawang/api"
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
@@ -13,6 +12,7 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 
+	"bawang/api"
 	"bawang/p2p"
 )
 
@@ -24,7 +24,7 @@ var (
 )
 
 type Peer struct {
-	DHShared *[32]byte
+	DHShared [32]byte
 	Port     uint16
 	Address  net.IP
 	HostKey  *rsa.PublicKey
@@ -40,7 +40,7 @@ type Tunnel struct {
 func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err error) {
 	encryptedMsg = relayMsg
 	for _, hop := range tunnel.Hops {
-		encryptedMsg, err = p2p.EncryptRelay(encryptedMsg, hop.DHShared)
+		encryptedMsg, err = p2p.EncryptRelay(encryptedMsg, &hop.DHShared)
 		if err != nil { // error when decrypting
 			return
 		}
@@ -51,7 +51,7 @@ func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err
 func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader, decryptedRelayMsg []byte, ok bool, err error) {
 	decryptedRelayMsg = data
 	for _, hop := range tunnel.Hops {
-		ok, decryptedRelayMsg, err = p2p.DecryptRelay(decryptedRelayMsg, hop.DHShared)
+		ok, decryptedRelayMsg, err = p2p.DecryptRelay(decryptedRelayMsg, &hop.DHShared)
 		if err != nil { // error when decrypting
 			return
 		}
@@ -77,10 +77,10 @@ type TunnelSegment struct {
 	NextHopTunnelID uint32
 	PrevHopLink     *Link
 	NextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
-	DHShared        *[32]byte // diffie hellman key shared with the previous hop
+	DHShared        *[32]byte // Diffie-Hellman key shared with the previous hop
 }
 
-func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *[32]byte, err error) {
+func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH, encDHPubKey *[32]byte, err error) {
 	pubDH, privDH, err := box.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -97,13 +97,13 @@ func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *
 	encDHPubKey = new([32]byte)
 	copy(encDHPubKey[:], encDHKey[:32])
 
-	return
+	return privDH, encDHPubKey, nil
 }
 
 func CreateTunnelCreate(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.TunnelCreate, err error) {
 	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	msg = &p2p.TunnelCreate{
@@ -111,13 +111,13 @@ func CreateTunnelCreate(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.
 		EncDHPubKey: *encDHPubKey,
 	}
 
-	return
+	return privDH, msg, nil
 }
 
 func CreateTunnelExtend(peerHostKey *rsa.PublicKey, address net.IP, port uint16) (privDH *[32]byte, msg *p2p.RelayTunnelExtend, err error) {
 	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	msg = &p2p.RelayTunnelExtend{
@@ -127,7 +127,7 @@ func CreateTunnelExtend(peerHostKey *rsa.PublicKey, address net.IP, port uint16)
 		EncDHPubKey: *encDHPubKey,
 	}
 
-	return
+	return privDH, msg, nil
 }
 
 func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
@@ -190,8 +190,7 @@ type Onion struct {
 // here are the functions used by the module communicating with the API
 func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err error) {
 	if len(hops) < 3 {
-		err = ErrNotEnoughHops
-		return
+		return nil, ErrNotEnoughHops
 	}
 
 	msgBuf := make([]byte, p2p.MaxSize)
@@ -202,7 +201,7 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 	// first we fetch us a link connection to the first hop
 	link, err := onion.GetOrCreateLink(hops[0].Address, hops[0].Port)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	tunnel = &Tunnel{
@@ -214,42 +213,40 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 	dataOut := make(chan message, 5) // TODO: determine queue size
 	err = link.register(tunnelID, dataOut)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	// send a create message to the first hop
 	dhPriv, createMsg, err := CreateTunnelCreate(hops[0].HostKey)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	err = link.Send(tunnelID, createMsg)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	// now we wait for the response, timeouting when one does not come
 	select {
 	case created := <-dataOut:
 		if created.hdr.Type != p2p.TypeTunnelCreated {
-			err = p2p.ErrInvalidMessage
-			return
+			return nil, p2p.ErrInvalidMessage
 		}
 
 		createdMsg := p2p.TunnelCreated{}
 		err = createdMsg.Parse(created.payload)
 		if err != nil {
-			return
+			return nil, err
 		}
 
-		dhShared := new([32]byte)
-		box.Precompute(dhShared, &createdMsg.DHPubKey, dhPriv)
+		var dhShared [32]byte
+		box.Precompute(&dhShared, &createdMsg.DHPubKey, dhPriv)
 
 		// validate the shared key hash
 		sharedHash := sha256.Sum256(dhShared[:32])
 		if !bytes.Equal(sharedHash[:], createdMsg.SharedKeyHash[:]) {
-			err = ErrMisbehavingPeer
-			return
+			return nil, ErrMisbehavingPeer
 		}
 
 		tunnel.Hops = []*Peer{{
@@ -260,9 +257,9 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 		}}
 
 		break
+
 	case <-time.After(time.Duration(cfg.CreateTimeout) * time.Second):
-		err = ErrTimedOut
-		return
+		return nil, ErrTimedOut
 	}
 
 	// handshake with first hop is done, do the remaining ones
@@ -273,11 +270,15 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 		}
 
 		n, err := p2p.PackRelayMessage(msgBuf, tunnel.Counter, extendMsg)
+		if err != nil {
+			return nil, err
+		}
 
 		// layer on encryption
 		packedMsg := msgBuf[:n]
 		for j := len(tunnel.Hops) - 1; j > 1; j-- {
-			encMsg, err := p2p.EncryptRelay(packedMsg, tunnel.Hops[j].DHShared)
+			var encMsg []byte
+			encMsg, err = p2p.EncryptRelay(packedMsg, &tunnel.Hops[j].DHShared)
 			if err != nil {
 				return nil, err
 			}
@@ -313,8 +314,8 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 				return nil, err
 			}
 
-			dhShared := new([32]byte)
-			box.Precompute(dhShared, &extendedMsg.DHPubKey, dhPriv)
+			var dhShared [32]byte
+			box.Precompute(&dhShared, &extendedMsg.DHPubKey, dhPriv)
 
 			// validate the shared key hash
 			sharedHash := sha256.Sum256(dhShared[:32])
@@ -335,33 +336,29 @@ func (onion *Onion) BuildTunnel(cfg *Config, hops []*Peer) (tunnel *Tunnel, err 
 		}
 	}
 
-	return
+	return tunnel, nil
 }
 
 func (onion *Onion) SendData(tunnelID uint32, payload []byte) (err error) {
 	if tunnel, ok := onion.OutgoingTunnels[tunnelID]; ok {
-		encryptedMsg, err := tunnel.EncryptRelayMsg(payload)
+		var encryptedMsg []byte
+		encryptedMsg, err = tunnel.EncryptRelayMsg(payload)
 		if err != nil {
 			return err
 		}
 
-		err = tunnel.Link.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
-		if err != nil {
-			return err
-		}
+		return tunnel.Link.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
 	} else if tunnelSegment, ok := onion.IncomingTunnels[tunnelID]; ok {
-		encryptedMsg, err := p2p.EncryptRelay(payload, tunnelSegment.DHShared)
+		var encryptedMsg []byte
+		encryptedMsg, err = p2p.EncryptRelay(payload, tunnelSegment.DHShared)
 		if err != nil {
 			return err
 		}
-		err = tunnelSegment.PrevHopLink.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
-		if err != nil {
-			return err
-		}
+
+		return tunnelSegment.PrevHopLink.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
 	}
 
-	err = ErrInvalidTunnel
-	return
+	return ErrInvalidTunnel
 }
 
 // more internal functions
@@ -390,13 +387,12 @@ func (onion *Onion) SendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 		}
 	}
 
-	return
+	return nil
 }
 
 func (onion *Onion) RegisterIncomingConnection(tunnelID uint32) (err error) {
 	if _, ok := onion.Tunnels[tunnelID]; !ok {
-		err = ErrInvalidTunnel
-		return
+		return ErrInvalidTunnel
 	}
 
 	onion.Tunnels[tunnelID] = make([]*api.Connection, len(onion.APIConnections))
@@ -406,16 +402,11 @@ func (onion *Onion) RegisterIncomingConnection(tunnelID uint32) (err error) {
 		TunnelID: tunnelID,
 	}
 
-	err = onion.SendMsgToAllAPI(&incomingMsg)
-	if err != nil {
-		return
-	}
-
-	return
+	return onion.SendMsgToAllAPI(&incomingMsg)
 }
 
 func (onion *Onion) RemoveAPIConnection(apiConn *api.Connection) {
-	for tunnelID, _ := range onion.Tunnels {
+	for tunnelID := range onion.Tunnels {
 		onion.RemoveAPIConnectionFromTunnel(tunnelID, apiConn)
 	}
 
@@ -463,12 +454,11 @@ func (onion *Onion) RemoveTunnel(tunnelID uint32) {
 	}
 
 	// TODO: determine if we can even send an error message to the api in a way to let them know the tunnel is gone
-	//onionErrMsg := api.OnionError{
-	//	TunnelID: tunnelID,
-	//	RequestType: api.TypeOnionTunnelReady,
-	//}
-	//
-	//err = onion.SendMsgToAPI(tunnelID, &onionErrMsg)
+	// onionErrMsg := api.OnionError{
+	// 	TunnelID: tunnelID,
+	// 	RequestType: api.TypeOnionTunnelReady,
+	// }
+	// err = onion.SendMsgToAPI(tunnelID, &onionErrMsg)
 
 	for _, link := range onion.Links {
 		if link.HasTunnel(tunnelID) {
