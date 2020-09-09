@@ -98,14 +98,14 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	return isOk
 }
 
-func PackRelayMessage(buf []byte, currCounter uint64, msg RelayMessage) (n int, err error) {
+func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (n int, err error) {
 	n = msg.PackedSize() + RelayHeaderSize
 	if len(buf) < n {
 		return -1, ErrBufferTooSmall
 	}
 
 	// generate random counter, greater than the previous one
-	counter := currCounter + uint64(rand.Int63n(128))
+	counter += uint64(rand.Int63n(128))
 	byteCounter := make([]byte, 4)
 	binary.BigEndian.PutUint64(byteCounter, counter)
 	ctr := [3]byte{}

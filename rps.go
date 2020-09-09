@@ -18,7 +18,7 @@ var (
 	errInvalidPeer = errors.New("invalid peer")
 )
 
-type rps struct {
+type RPS struct {
 	cfg *onion.Config
 
 	l      sync.Mutex // guards fields below
@@ -27,8 +27,8 @@ type rps struct {
 	rd     *bufio.Reader
 }
 
-func NewRPS(cfg *onion.Config) (r *rps, err error) {
-	r = &rps{
+func NewRPS(cfg *onion.Config) (r *RPS, err error) {
+	r = &RPS{
 		cfg: cfg,
 	}
 	err = r.connect()
@@ -38,7 +38,7 @@ func NewRPS(cfg *onion.Config) (r *rps, err error) {
 	return
 }
 
-func (r *rps) connect() (err error) {
+func (r *RPS) connect() (err error) {
 	r.nc, err = net.Dial("tcp", r.cfg.RPSAPIAddress)
 	if err != nil {
 		return err
@@ -47,14 +47,14 @@ func (r *rps) connect() (err error) {
 	return
 }
 
-func (r *rps) Close() {
+func (r *RPS) Close() {
 	err := r.nc.Close()
 	if err != nil {
 		log.Printf("error closing RPS API connection %s", err)
 	}
 }
 
-func (r *rps) getPeer() (peer *onion.Peer, err error) {
+func (r *RPS) getPeer() (peer *onion.Peer, err error) {
 	// concurrent IO not such a great idea
 	r.l.Lock()
 	defer r.l.Unlock()

@@ -67,10 +67,14 @@ func PackMessage(buf []byte, msg Message) (n int, err error) {
 	header := Header{uint16(n), msg.Type()}
 	header.Pack(buf)
 	n2, err := msg.Pack(buf[HeaderSize:])
-	if n2+HeaderSize != n && err == nil {
+	if err != nil {
+		return -1, err
+	}
+	if n2+HeaderSize != n {
 		return -1, ErrInvalidMessage
 	}
-	return
+
+	return n, nil
 }
 
 // func WriteMessage(wr *bufio.Writer, msg Message) (err error) {

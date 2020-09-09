@@ -21,10 +21,10 @@ func main() {
 	}
 
 	quitChan := make(chan struct{})
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		sig := <-sigs
+		sig := <-sigChan
 		log.Printf("Received signal %v, shutting down\n", sig)
 		close(quitChan)
 	}()
