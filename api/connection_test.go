@@ -10,7 +10,7 @@ func TestConnectionSend(t *testing.T) {
 	// TODO: test for actual implementation
 	var conn Connection
 	err := conn.Send(nil)
-	require.Nil(t, err)
+	require.NotNil(t, err)
 }
 
 func TestConnectionTerminate(t *testing.T) {
