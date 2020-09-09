@@ -15,7 +15,7 @@ import (
 	"bawang/onion"
 )
 
-func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error, quit chan struct{}) {
+func ListenOnionSocket(router *onion.Router, cfg *onion.Config, errOut chan error, quit chan struct{}) {
 	// construct tls certificate from p2p hostkey
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
@@ -121,9 +121,12 @@ func ListenOnionSocket(onjon *onion.Onion, cfg *onion.Config, errOut chan error,
 		}
 
 		log.Printf("Received new connection from peer %v:%v", ip, port)
+		link, err := router.CreateLinkFromExistingConn(net.ParseIP(ip), uint16(portParsed), tlsConn)
+		if err != nil {
+			log.Printf("Error creating link to %v:%v: %v\n", ip, portParsed, err)
+			continue
+		}
 
-		link := onion.NewLinkFromExistingConn(net.ParseIP(ip), uint16(portParsed), tlsConn)
-		onjon.Links = append(onjon.Links, link)
-		go link.HandleConnection(onjon, cfg, goRoutineErrOut)
+		go router.HandleConnection(link, goRoutineErrOut)
 	}
 }

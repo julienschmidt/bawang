@@ -30,12 +30,12 @@ func TestListenOnionSocket(t *testing.T) {
 	hostKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.Nil(t, err)
 	cfg.HostKey = hostKey
-	onjon := onion.Onion{}
+	router := onion.NewRouter(&cfg)
 
 	errChan := make(chan error)
 	quitChan := make(chan struct{})
 
-	go ListenOnionSocket(&onjon, &cfg, errChan, quitChan)
+	go ListenOnionSocket(router, &cfg, errChan, quitChan)
 	time.Sleep(1 * time.Second) // annoyingly wait for the socket to fully start
 
 	tlsConfig := &tls.Config{

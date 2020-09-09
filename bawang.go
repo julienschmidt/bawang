@@ -29,13 +29,13 @@ func main() {
 		close(quitChan)
 	}()
 
-	onjon := onion.Onion{}
+	router := onion.Router{}
 	errChanOnion := make(chan error)
 
-	go ListenOnionSocket(&onjon, &cfg, errChanOnion, quitChan)
+	go ListenOnionSocket(&router, &cfg, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)
-	go ListenAPISocket(&cfg, &onjon, errChanAPI, quitChan)
+	go ListenAPISocket(&cfg, &router, errChanAPI, quitChan)
 
 	select {
 	case err = <-errChanOnion:

@@ -10,7 +10,7 @@ import (
 	"bawang/onion"
 )
 
-func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
+func HandleAPIConnection(apiConn *api.Connection, router *onion.Router) {
 	defer apiConn.Conn.Close()
 
 	var msgBuf [api.MaxSize]byte
@@ -84,7 +84,7 @@ func HandleAPIConnection(apiConn *api.Connection, onion *onion.Onion) {
 	}
 }
 
-func ListenAPISocket(cfg *onion.Config, onjon *onion.Onion, errOut chan error, quit chan struct{}) {
+func ListenAPISocket(cfg *onion.Config, router *onion.Router, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		errOut <- err
@@ -112,6 +112,6 @@ func ListenAPISocket(cfg *onion.Config, onjon *onion.Onion, errOut chan error, q
 			Conn: conn,
 		}
 
-		go HandleAPIConnection(&apiConn, onjon)
+		go HandleAPIConnection(&apiConn, router)
 	}
 }
