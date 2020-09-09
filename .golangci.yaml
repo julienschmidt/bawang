@@ -132,6 +132,7 @@ issues:
         - gosec
         - lll
         - noctx
+        - nolintlint
         - prealloc
         - unparam
 
