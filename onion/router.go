@@ -1,3 +1,4 @@
+// Package onion provides the onion routing logic.
 package onion
 
 import (
@@ -283,6 +284,7 @@ func (r *Router) removeAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 }
 
 func (r *Router) NewTunnelID() (tunnelID uint32) {
+func (r *Router) newTunnelID() (tunnelID uint32) {
 	random := mathRand.New(mathRand.NewSource(time.Now().UnixNano())) //nolint:gosec // pseudo-rand is good enough. We just need uniqueness.
 	tunnelID = random.Uint32()
 	// ensure that tunnelID is unique

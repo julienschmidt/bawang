@@ -1,3 +1,4 @@
+// Package config provides the Bawang config.
 package config
 
 import (

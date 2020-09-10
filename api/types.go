@@ -1,3 +1,4 @@
+// Package api provides types and helper functions to send and receive API messages.
 package api
 
 type Type uint16

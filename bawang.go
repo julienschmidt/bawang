@@ -1,3 +1,4 @@
+// Package main provides the main application logic of bawang.
 package main
 
 import (

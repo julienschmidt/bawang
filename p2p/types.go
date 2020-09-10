@@ -1,3 +1,4 @@
+// Package p2p provides types and helper functions to send and receive P2P messages.
 package p2p
 
 type Type uint8
