@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,9 @@ func (mm *MockMsg) Parse(data []byte) error {
 }
 
 func (mm *MockMsg) Pack(buf []byte) (n int, err error) {
+	if mm.PackData != nil {
+		copy(buf, mm.PackData)
+	}
 	return len(mm.PackData), mm.PackErr
 }
 
@@ -105,13 +109,21 @@ func TestPackMessage(t *testing.T) {
 	})
 
 	t.Run("invalid msg", func(t *testing.T) {
+		packErr := errors.New("pack err")
+
 		var buf [64]byte
 		msg := &MockMsg{
 			ReportedType:       TypeOnionCover,
 			ReportedPackedSize: 42,
+			PackErr:            packErr,
 		}
 
 		_, err := PackMessage(buf[:], msg)
+		require.Equal(t, packErr, err)
+
+		msg.PackErr = nil
+
+		_, err = PackMessage(buf[:], msg)
 		require.Equal(t, ErrInvalidMessage, err)
 
 		_, err = PackMessage(buf[:], nil)
