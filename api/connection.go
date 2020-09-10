@@ -11,13 +11,10 @@ type Connection struct {
 }
 
 func (conn *Connection) SendError(msgType Type, tunnelID uint32) (err error) {
-	errMsg := OnionError{
-		TunnelID: tunnelID,
+	return conn.Send(&OnionError{
+		TunnelID:    tunnelID,
 		RequestType: msgType,
-	}
-
-	err = conn.Send(&errMsg)
-	return err
+	})
 }
 
 func (conn *Connection) Send(msg Message) (err error) {
@@ -33,6 +30,9 @@ func (conn *Connection) Send(msg Message) (err error) {
 }
 
 func (conn *Connection) Terminate() (err error) {
+	if conn.Conn == nil {
+		return nil
+	}
 	conn.Conn.Close()
 	// TODO: implement
 	return nil
