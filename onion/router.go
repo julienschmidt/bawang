@@ -13,11 +13,12 @@ import (
 	"golang.org/x/crypto/nacl/box"
 
 	"bawang/api"
+	"bawang/config"
 	"bawang/p2p"
 )
 
 type Router struct {
-	cfg *Config
+	cfg *config.Config
 
 	links []*Link
 
@@ -32,7 +33,7 @@ type Router struct {
 
 // here are the functions used by the module communicating with the API
 
-func NewRouter(cfg *Config) *Router {
+func NewRouter(cfg *config.Config) *Router {
 	return &Router{
 		cfg: cfg,
 	}

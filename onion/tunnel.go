@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 
+	"bawang/config"
 	"bawang/p2p"
 )
 
@@ -126,7 +127,7 @@ func CreateTunnelExtend(peerHostKey *rsa.PublicKey, address net.IP, port uint16)
 	return privDH, msg, nil
 }
 
-func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
+func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
 	if msg.Version != 1 {
 		return nil, nil, ErrInvalidProtocolVersion
 	}

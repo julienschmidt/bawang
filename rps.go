@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"bawang/api"
+	"bawang/config"
 	"bawang/onion"
 )
 
@@ -19,7 +20,7 @@ var (
 )
 
 type RPS struct {
-	cfg *onion.Config
+	cfg *config.Config
 
 	l      sync.Mutex // guards fields below
 	msgBuf [api.MaxSize]byte
@@ -27,7 +28,7 @@ type RPS struct {
 	rd     *bufio.Reader
 }
 
-func NewRPS(cfg *onion.Config) (r *RPS, err error) {
+func NewRPS(cfg *config.Config) (r *RPS, err error) {
 	r = &RPS{
 		cfg: cfg,
 	}

@@ -11,12 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"bawang/config"
 	"bawang/onion"
 	"bawang/p2p"
 )
 
 func TestListenOnionSocket(t *testing.T) {
-	cfg := onion.Config{
+	cfg := config.Config{
 		P2PHostname:     "127.0.0.1",
 		P2PPort:         15000,
 		RPSAPIAddress:   "127.0.0.1:14001",
