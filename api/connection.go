@@ -10,6 +10,16 @@ type Connection struct {
 	msgBuf [MaxSize]byte
 }
 
+func (conn *Connection) SendError(msgType Type, tunnelID uint32) (err error) {
+	errMsg := OnionError{
+		TunnelID: tunnelID,
+		RequestType: msgType,
+	}
+
+	err = conn.Send(&errMsg)
+	return err
+}
+
 func (conn *Connection) Send(msg Message) (err error) {
 	// TODO: implement
 	n, err := PackMessage(conn.msgBuf[:], msg)
@@ -23,7 +33,7 @@ func (conn *Connection) Send(msg Message) (err error) {
 }
 
 func (conn *Connection) Terminate() (err error) {
-	// defer conn.Conn.Close()
+	conn.Conn.Close()
 	// TODO: implement
 	return nil
 }

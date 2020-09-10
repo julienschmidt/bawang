@@ -11,8 +11,9 @@ import (
 	"bawang/onion"
 )
 
-func HandleAPIConnection(apiConn *api.Connection, router *onion.Router, rps *RPS) {
-	defer apiConn.Conn.Close()
+func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, router *onion.Router) {
+	defer apiConn.Terminate()
+	defer router.RemoveAPIConnection(apiConn)
 
 	var msgBuf [api.MaxSize]byte
 	rd := bufio.NewReader(apiConn.Conn)
@@ -46,7 +47,42 @@ func HandleAPIConnection(apiConn *api.Connection, router *onion.Router, rps *RPS
 				log.Printf("Error parsing OnionTunnelBuild message body: %v\n", err)
 				continue
 			}
-			// TODO: some action
+
+			var peers []*onion.Peer
+			for i := 0; i < cfg.TunnelLength-1; i++ {
+				peer, err := rps.GetPeer()
+				if err != nil {
+					err = apiConn.SendError(api.TypeOnionTunnelBuild, 0)
+					if err != nil {
+						return
+					}
+				}
+				peers = append(peers, peer)
+			}
+
+			targetKey, err := msg.ParseHostKey()
+
+			targetPeer := &onion.Peer{
+				Port:    msg.OnionPort,
+				Address: msg.Address,
+				HostKey: targetKey,
+			}
+
+			peers = append(peers, targetPeer)
+
+			tunnel, err := router.BuildTunnel(peers, apiConn)
+			tunnelCreated := api.OnionTunnelReady{
+				TunnelID:    tunnel.ID,
+				DestHostKey: msg.DestHostKey,
+			}
+
+			err = apiConn.Send(&tunnelCreated)
+			if err != nil {
+				err = apiConn.SendError(api.TypeOnionTunnelBuild, tunnel.ID)
+				if err != nil {
+					return
+				}
+			}
 			log.Println("Onion TunnelID Build")
 
 		case api.TypeOnionTunnelDestroy:
@@ -54,29 +90,41 @@ func HandleAPIConnection(apiConn *api.Connection, router *onion.Router, rps *RPS
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing OnionTunnelDestroy message body: %v\n", err)
-				continue
+				return
 			}
-			// TODO: some action
-			log.Println("Onion TunnelID Destroy")
+			router.RemoveAPIConnectionFromTunnel(msg.TunnelID, apiConn)
+			log.Printf("Destroying Onion tunnel with ID: %v\n", msg.TunnelID)
 
 		case api.TypeOnionTunnelData:
 			var msg api.OnionTunnelData
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing OnionTunnelData message body: %v\n", err)
-				continue
+				return
 			}
-			// TODO: some action
-			log.Println("Onion TunnelID Data")
+			err = router.SendData(msg.TunnelID, msg.Data)
+			log.Printf("Sending Data on Onion tunnel %v\n", msg.TunnelID)
+			if err != nil {
+				log.Printf("Error sending onion data on tunnel %v\n", msg.TunnelID)
+				err = apiConn.SendError(api.TypeOnionTunnelData, msg.TunnelID)
+				if err != nil {
+					return
+				}
+			}
 
 		case api.TypeOnionCover:
 			var msg api.OnionCover
 			err := msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing OnionCover message body: %v\n", err)
-				continue
+				return
 			}
-			// TODO: some action
+			err = router.SendCover(msg.CoverSize)
+			if err != nil {
+				log.Println("Error when sending cover traffic")
+				_ = apiConn.SendError(api.TypeOnionCover, 0)
+				return
+			}
 			log.Println("Onion TunnelID Cover")
 
 		default:
@@ -112,7 +160,8 @@ func ListenAPISocket(cfg *config.Config, router *onion.Router, rps *RPS, errOut 
 		apiConn := api.Connection{
 			Conn: conn,
 		}
+		router.RegisterAPIConnection(&apiConn)
 
-		go HandleAPIConnection(&apiConn, router, rps)
+		go HandleAPIConnection(cfg, &apiConn, rps, router)
 	}
 }

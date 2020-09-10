@@ -75,6 +75,7 @@ type TunnelSegment struct {
 	PrevHopLink     *Link
 	NextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
 	DHShared        *[32]byte // Diffie-Hellman key shared with the previous hop
+	Counter         uint64
 }
 
 func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH, encDHPubKey *[32]byte, err error) {

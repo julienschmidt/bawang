@@ -40,7 +40,16 @@ func NewRouter(cfg *config.Config) *Router {
 	}
 }
 
-func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
+func (r *Router) RegisterAPIConnection(apiConn *api.Connection) {
+	r.apiConnections = append(r.apiConnections, apiConn)
+}
+
+func (r *Router) SendCover(coverSize uint16) (err error) {
+	// TODO: implement
+	return
+}
+
+func (r *Router) BuildTunnel(hops []*Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
 	if len(hops) < 3 {
 		return nil, ErrNotEnoughHops
 	}
@@ -119,7 +128,8 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 			return nil, err
 		}
 
-		n, err := p2p.PackRelayMessage(msgBuf, tunnel.Counter, extendMsg)
+		var n int
+		tunnel.Counter, n, err = p2p.PackRelayMessage(msgBuf, tunnel.Counter, extendMsg)
 		if err != nil {
 			return nil, err
 		}
@@ -182,21 +192,40 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 		}
 	}
 
+	r.tunnels[tunnel.ID] = append(r.tunnels[tunnel.ID], apiConn)
+	r.outgoingTunnels[tunnel.ID] = tunnel
 	return tunnel, nil
 }
 
-func (r *Router) sendData(tunnelID uint32, payload []byte) (err error) {
+func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
+	relayData := p2p.RelayTunnelData{
+		Data: payload,
+	}
+
+	buf := make([]byte, p2p.MaxRelaySize)
 	if tunnel, ok := r.outgoingTunnels[tunnelID]; ok {
+		var n int
+		tunnel.Counter, n, err = p2p.PackRelayMessage(buf, tunnel.Counter, &relayData)
+		if err != nil {
+			return err
+		}
+
 		var encryptedMsg []byte
-		encryptedMsg, err = tunnel.EncryptRelayMsg(payload)
+		encryptedMsg, err = tunnel.EncryptRelayMsg(buf[:n])
 		if err != nil {
 			return err
 		}
 
 		return tunnel.Link.SendRaw(tunnelID, p2p.TypeTunnelRelay, encryptedMsg)
 	} else if tunnelSegment, ok := r.incomingTunnels[tunnelID]; ok {
+		var n int
+		tunnelSegment.Counter, n, err = p2p.PackRelayMessage(buf, tunnelSegment.Counter, &relayData)
+		if err != nil {
+			return err
+		}
+
 		var encryptedMsg []byte
-		encryptedMsg, err = p2p.EncryptRelay(payload, tunnelSegment.DHShared)
+		encryptedMsg, err = p2p.EncryptRelay(buf[:n], tunnelSegment.DHShared)
 		if err != nil {
 			return err
 		}
@@ -212,7 +241,7 @@ func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
 		sendError := apiConn.Send(msg)
 		if sendError != nil {
 			sendError = apiConn.Terminate()
-			r.removeAPIConnection(apiConn)
+			r.RemoveAPIConnection(apiConn)
 		}
 	}
 
@@ -228,7 +257,7 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 		sendError := apiConn.Send(msg)
 		if sendError != nil {
 			sendError = apiConn.Terminate()
-			r.removeAPIConnection(apiConn)
+			r.RemoveAPIConnection(apiConn)
 		}
 	}
 
@@ -250,9 +279,9 @@ func (r *Router) RegisterIncomingConnection(tunnelID uint32) (err error) {
 	return r.sendMsgToAllAPI(&incomingMsg)
 }
 
-func (r *Router) removeAPIConnection(apiConn *api.Connection) {
+func (r *Router) RemoveAPIConnection(apiConn *api.Connection) {
 	for tunnelID := range r.tunnels {
-		r.removeAPIConnectionFromTunnel(tunnelID, apiConn)
+		r.RemoveAPIConnectionFromTunnel(tunnelID, apiConn)
 	}
 
 	for i, conn := range r.apiConnections {
@@ -263,7 +292,7 @@ func (r *Router) removeAPIConnection(apiConn *api.Connection) {
 	}
 }
 
-func (r *Router) removeAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) {
+func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) {
 	if _, ok := r.tunnels[tunnelID]; !ok {
 		return
 	}

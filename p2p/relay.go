@@ -107,10 +107,10 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	return ok
 }
 
-func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (n int, err error) {
+func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (newCounter uint64, n int, err error) {
 	n = msg.PackedSize() + RelayHeaderSize
 	if len(buf) < n {
-		return -1, ErrBufferTooSmall
+		return counter, -1, ErrBufferTooSmall
 	}
 
 	// generate random counter, greater than the previous one
@@ -128,16 +128,16 @@ func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (n int, err 
 	rand.Read(buf[RelayHeaderSize:n]) // initialize the full 512 - HeaderSize bytes of the messages with pseudo randomness
 	n2, err := msg.Pack(buf[RelayHeaderSize:])
 	if n2+RelayHeaderSize != n && err == nil {
-		return -1, ErrInvalidMessage
+		return counter, -1, ErrInvalidMessage
 	}
 	header.ComputeDigest(buf[RelayHeaderSize:])
 
 	err = header.Pack(buf[:RelayHeaderSize])
 	if err != nil {
-		return -1, err
+		return counter, -1, err
 	}
 
-	return n, nil
+	return counter, n, nil
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
