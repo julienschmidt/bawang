@@ -15,7 +15,7 @@ import (
 	"bawang/onion"
 )
 
-func ListenOnionSocket(router *onion.Router, cfg *onion.Config, errOut chan error, quit chan struct{}) {
+func ListenOnionSocket(cfg *onion.Config, router *onion.Router, errOut chan error, quit chan struct{}) {
 	// construct tls certificate from p2p hostkey
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)

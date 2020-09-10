@@ -35,7 +35,7 @@ func TestListenOnionSocket(t *testing.T) {
 	errChan := make(chan error)
 	quitChan := make(chan struct{})
 
-	go ListenOnionSocket(router, &cfg, errChan, quitChan)
+	go ListenOnionSocket(&cfg, router, errChan, quitChan)
 	time.Sleep(1 * time.Second) // annoyingly wait for the socket to fully start
 
 	tlsConfig := &tls.Config{

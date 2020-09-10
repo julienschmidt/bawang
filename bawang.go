@@ -29,13 +29,17 @@ func main() {
 		close(quitChan)
 	}()
 
-	router := onion.Router{}
+	router := onion.NewRouter(&cfg)
+	rps, err := NewRPS(&cfg)
+	if err != nil {
+		log.Fatalf("Error initializing RPS: %v", err)
+	}
 	errChanOnion := make(chan error)
 
-	go ListenOnionSocket(&router, &cfg, errChanOnion, quitChan)
+	go ListenOnionSocket(&cfg, router, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)
-	go ListenAPISocket(&cfg, &router, errChanAPI, quitChan)
+	go ListenAPISocket(&cfg, router, rps, errChanAPI, quitChan)
 
 	select {
 	case err = <-errChanOnion:

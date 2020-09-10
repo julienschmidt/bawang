@@ -54,7 +54,7 @@ func (r *RPS) Close() {
 	}
 }
 
-func (r *RPS) getPeer() (peer *onion.Peer, err error) {
+func (r *RPS) GetPeer() (peer *onion.Peer, err error) {
 	// concurrent IO not such a great idea
 	r.l.Lock()
 	defer r.l.Unlock()
