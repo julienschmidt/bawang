@@ -114,7 +114,7 @@ func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (newCounter 
 	}
 
 	// generate random counter, greater than the previous one
-	counter += uint64(rand.Int63n(128))
+	counter += uint64(rand.Int63n(128)) //nolint:gosec // pseudo-rand is good enough here
 	byteCounter := make([]byte, 4)
 	binary.BigEndian.PutUint64(byteCounter, counter)
 	ctr := [3]byte{}
@@ -125,7 +125,8 @@ func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (newCounter 
 		Size:      uint16(msg.PackedSize() + RelayHeaderSize),
 	}
 
-	rand.Read(buf[RelayHeaderSize:n]) // initialize the full 512 - HeaderSize bytes of the messages with pseudo randomness
+	// initialize the full 512 - HeaderSize bytes of the messages with pseudo randomness
+	rand.Read(buf[RelayHeaderSize:n]) //nolint:gosec // pseudo-rand is good enough here
 	n2, err := msg.Pack(buf[RelayHeaderSize:])
 	if n2+RelayHeaderSize != n && err == nil {
 		return counter, -1, ErrInvalidMessage
