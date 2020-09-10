@@ -17,7 +17,7 @@ type Config struct {
 	P2PPort         int
 	RPSAPIAddress   string // API socket address of the RPS module
 	OnionAPIAddress string
-	TunnelLength	int
+	TunnelLength    int
 	BuildTimeout    int
 	CreateTimeout   int
 	APITimeout      int

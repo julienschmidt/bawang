@@ -236,18 +236,6 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 	return ErrInvalidTunnel
 }
 
-func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
-	for _, apiConn := range r.apiConnections {
-		sendError := apiConn.Send(msg)
-		if sendError != nil {
-			sendError = apiConn.Terminate()
-			r.RemoveAPIConnection(apiConn)
-		}
-	}
-
-	return nil
-}
-
 func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 	apiConns, ok := r.tunnels[tunnelID]
 	if !ok {
@@ -257,6 +245,24 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 		sendError := apiConn.Send(msg)
 		if sendError != nil {
 			sendError = apiConn.Terminate()
+			if sendError != nil {
+				log.Printf("Error terminating API conn: %v\n", sendError)
+			}
+			r.RemoveAPIConnection(apiConn)
+		}
+	}
+
+	return nil
+}
+
+func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
+	for _, apiConn := range r.apiConnections {
+		sendError := apiConn.Send(msg)
+		if sendError != nil {
+			sendError = apiConn.Terminate()
+			if sendError != nil {
+				log.Printf("Error terminating API conn: %v\n", sendError)
+			}
 			r.RemoveAPIConnection(apiConn)
 		}
 	}
@@ -589,7 +595,6 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 						errOut <- p2p.ErrInvalidMessage
 						return
 					}
-
 				} else {
 					// relay message is not meant for us
 					if tunnel.NextHopLink != nil { // simply pass it along with one layer of encryption removed

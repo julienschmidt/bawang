@@ -12,8 +12,14 @@ import (
 )
 
 func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, router *onion.Router) {
-	defer apiConn.Terminate()
-	defer router.RemoveAPIConnection(apiConn)
+	defer func() {
+		router.RemoveAPIConnection(apiConn)
+		err := apiConn.Terminate()
+		if err != nil {
+			log.Printf("Error terminating API conn: %v\n", err)
+			return
+		}
+	}()
 
 	var msgBuf [api.MaxSize]byte
 	rd := bufio.NewReader(apiConn.Conn)
@@ -50,10 +56,13 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, 
 
 			var peers []*onion.Peer
 			for i := 0; i < cfg.TunnelLength-1; i++ {
-				peer, err := rps.GetPeer()
+				var peer *onion.Peer
+				peer, err = rps.GetPeer()
 				if err != nil {
+					log.Printf("Error getting random peer: %v\n", err)
 					err = apiConn.SendError(api.TypeOnionTunnelBuild, 0)
 					if err != nil {
+						log.Printf("Error sending error: %v\n", err)
 						return
 					}
 				}
@@ -61,6 +70,10 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, 
 			}
 
 			targetKey, err := msg.ParseHostKey()
+			if err != nil {
+				log.Printf("Error parsing host key: %v\n", err)
+				return
+			}
 
 			targetPeer := &onion.Peer{
 				Port:    msg.OnionPort,
@@ -71,6 +84,11 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, 
 			peers = append(peers, targetPeer)
 
 			tunnel, err := router.BuildTunnel(peers, apiConn)
+			if err != nil {
+				log.Printf("Error building tunnel: %v\n", err)
+				return
+			}
+
 			tunnelCreated := api.OnionTunnelReady{
 				TunnelID:    tunnel.ID,
 				DestHostKey: msg.DestHostKey,
