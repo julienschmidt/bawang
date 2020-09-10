@@ -424,8 +424,12 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 							Data:     dataMsg.Data,
 						}
 
+						// currently, we only only get an error if the tunnel ID is invalid
 						err = r.sendMsgToAPI(tunnel.ID, &apiMessage)
-						// TODO: figure out if we want to really do nothing here with that error
+						if err != nil {
+							errOut <- err
+							return
+						}
 
 					default:
 						errOut <- p2p.ErrInvalidMessage
@@ -522,8 +526,12 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 							Data:     dataMsg.Data,
 						}
 
+						// currently, we only only get an error if the tunnel ID is invalid
 						err = r.sendMsgToAPI(tunnel.PrevHopTunnelID, &apiMessage)
-						// TODO: figure out if we want to really do nothing here with that error
+						if err != nil {
+							errOut <- err
+							return
+						}
 
 					case p2p.RelayTypeTunnelExtend: // this be quite interesting
 						extendMsg := p2p.RelayTunnelExtend{}
