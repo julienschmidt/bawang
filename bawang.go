@@ -36,8 +36,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing RPS: %v", err)
 	}
-	errChanOnion := make(chan error)
 
+	errChanOnion := make(chan error)
 	go ListenOnionSocket(&cfg, router, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)

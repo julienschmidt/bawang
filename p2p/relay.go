@@ -17,6 +17,15 @@ const (
 	MaxRelaySize     = MaxSize - HeaderSize
 )
 
+type RelayMessage interface {
+	Type() RelayType
+	Parse(data []byte) error
+	Pack(buf []byte) (n int, err error)
+	PackedSize() (n int)
+}
+
+const flagIPv6 = 1
+
 // RelayHeader is the header of a relay sub protocol protocol cell
 //  0                   1                   2                   3
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -86,16 +95,16 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	copy(digest, hdr.Digest[:])
 	hdr.ComputeDigest(msg)
 
-	isOk := true
+	ok = true
 	for i, v := range digest {
 		if v != hdr.Digest[i] {
-			isOk = false
+			ok = false
 			break
 		}
 	}
 	copy(hdr.Digest[:], digest)
 
-	return isOk
+	return ok
 }
 
 func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (n int, err error) {
@@ -181,15 +190,6 @@ func EncryptRelay(packedMsg []byte, key *[32]byte) (encMsg []byte, err error) {
 
 	return encMsg, nil
 }
-
-type RelayMessage interface {
-	Type() RelayType
-	Parse(data []byte) error
-	Pack(buf []byte) (n int, err error)
-	PackedSize() (n int)
-}
-
-const flagIPv6 = 1
 
 // RelayTunnelExtend commands the addressed tunnel hop to extend the tunnel by another hop.
 type RelayTunnelExtend struct {

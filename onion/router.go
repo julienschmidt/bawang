@@ -48,7 +48,7 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 	msgBuf := make([]byte, p2p.MaxSize)
 
 	// generate a new, unique tunnel ID
-	tunnelID := r.NewTunnelID()
+	tunnelID := r.newTunnelID()
 
 	// first we fetch us a link connection to the first hop
 	link, err := r.GetOrCreateLink(hops[0].Address, hops[0].Port)
@@ -108,8 +108,6 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 			HostKey:  hops[0].HostKey,
 		}}
 
-		break
-
 	case <-time.After(time.Duration(r.cfg.CreateTimeout) * time.Second):
 		return nil, ErrTimedOut
 	}
@@ -129,12 +127,10 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 		// layer on encryption
 		packedMsg := msgBuf[:n]
 		for j := len(tunnel.Hops) - 1; j > 1; j-- {
-			var encMsg []byte
-			encMsg, err = p2p.EncryptRelay(packedMsg, &tunnel.Hops[j].DHShared)
+			packedMsg, err = p2p.EncryptRelay(packedMsg, &tunnel.Hops[j].DHShared)
 			if err != nil {
 				return nil, err
 			}
-			packedMsg = encMsg
 		}
 
 		err = link.SendRaw(tunnelID, p2p.TypeTunnelRelay, packedMsg)
@@ -146,8 +142,7 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 		select {
 		case extended := <-dataOut:
 			if extended.hdr.Type != p2p.TypeTunnelRelay {
-				err = p2p.ErrInvalidMessage
-				return nil, err
+				return nil, p2p.ErrInvalidMessage
 			}
 
 			// decrypt the message
@@ -156,8 +151,7 @@ func (r *Router) BuildTunnel(hops []*Peer) (tunnel *Tunnel, err error) {
 				return nil, err
 			}
 			if !ok || relayHdr.RelayType != p2p.RelayTypeTunnelExtended {
-				err = ErrMisbehavingPeer
-				return nil, err
+				return nil, ErrMisbehavingPeer
 			}
 
 			extendedMsg := p2p.RelayTunnelExtended{}
@@ -213,7 +207,6 @@ func (r *Router) sendData(tunnelID uint32, payload []byte) (err error) {
 	return ErrInvalidTunnel
 }
 
-// more internal functions
 func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
 	for _, apiConn := range r.apiConnections {
 		sendError := apiConn.Send(msg)
@@ -283,7 +276,6 @@ func (r *Router) removeAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 	}
 }
 
-func (r *Router) NewTunnelID() (tunnelID uint32) {
 func (r *Router) newTunnelID() (tunnelID uint32) {
 	random := mathRand.New(mathRand.NewSource(time.Now().UnixNano())) //nolint:gosec // pseudo-rand is good enough. We just need uniqueness.
 	tunnelID = random.Uint32()
@@ -347,6 +339,7 @@ func (r *Router) GetLink(address net.IP, port uint16) (link *Link, ok bool) {
 			return link, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -371,11 +364,11 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 			if !channelOpen {
 				return
 			}
+
 			hdr := msg.hdr
 			switch hdr.Type {
 			case p2p.TypeTunnelRelay:
 				relayHdr, decryptedRelayMsg, ok, err := tunnel.DecryptRelayMessage(msg.payload)
-
 				if err != nil {
 					errOut <- err
 					return
@@ -398,6 +391,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 
 						err = r.sendMsgToAPI(tunnel.ID, &apiMessage)
 						// TODO: figure out if we want to really do nothing here with that error
+
 					default:
 						errOut <- p2p.ErrInvalidMessage
 						return
@@ -415,6 +409,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 				errOut <- p2p.ErrInvalidMessage
 				return
 			}
+
 		case <-tunnel.Link.Quit:
 			return
 		}
@@ -442,6 +437,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 			if !channelOpen {
 				return
 			}
+
 			hdr := msg.hdr
 			data := msg.payload
 			switch hdr.Type {
@@ -501,6 +497,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 							errOut <- err
 							return
 						}
+
 						var nextLink *Link
 						nextLink, err = r.GetOrCreateLink(extendMsg.Address, extendMsg.Port)
 						if err != nil {
@@ -509,13 +506,14 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 						}
 
 						tunnel.NextHopLink = nextLink
-						tunnel.NextHopTunnelID = r.NewTunnelID()
+						tunnel.NextHopTunnelID = r.newTunnelID()
 						createMsg := CreateMsgFromExtendMsg(extendMsg)
 						err = tunnel.NextHopLink.Send(tunnel.NextHopTunnelID, &createMsg)
 						if err != nil {
 							errOut <- err
 							return
 						}
+
 						select {
 						case created := <-dataChanNextHop:
 							if created.hdr.Type != p2p.TypeTunnelCreated {
@@ -545,11 +543,13 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 								errOut <- err
 								return
 							}
+
 							err = tunnel.PrevHopLink.SendRaw(tunnel.PrevHopTunnelID, p2p.TypeTunnelRelay, encryptedExtended)
 							if err != nil {
 								errOut <- err
 								return
 							}
+
 						case <-time.After(time.Duration(r.cfg.CreateTimeout) * time.Second): // timeout
 							errOut <- ErrTimedOut
 							return
@@ -560,6 +560,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 						errOut <- p2p.ErrInvalidMessage
 						return
 					}
+
 				} else {
 					// relay message is not meant for us
 					if tunnel.NextHopLink != nil { // simply pass it along with one layer of encryption removed
@@ -590,6 +591,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 			if !channelOpen {
 				return
 			}
+
 			hdr := msg.hdr
 			data := msg.payload
 			switch hdr.Type {
@@ -600,21 +602,25 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 					errOut <- err
 					return
 				}
+
 				err = tunnel.PrevHopLink.SendRaw(tunnel.PrevHopTunnelID, p2p.TypeTunnelRelay, encryptedMsg)
 				if err != nil {
 					errOut <- err
 					return
 				}
+
 			case p2p.TypeTunnelDestroy:
 				err = tunnel.PrevHopLink.SendDestroyTunnel(tunnel.PrevHopTunnelID)
 				if err != nil {
 					errOut <- err
 				}
 				return
+
 			default: // any other message is illegal here
 				errOut <- p2p.ErrInvalidMessage
 				return
 			}
+
 		case <-tunnel.PrevHopLink.Quit:
 			if tunnel.NextHopLink != nil {
 				err = tunnel.NextHopLink.Destroy()

@@ -68,6 +68,7 @@ func (link *Link) connect() (err error) {
 	tlsConfig := tls.Config{
 		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
 	}
+
 	// TODO: implement host key checking here
 	link.nc, err = tls.Dial("tcp", link.Address.String()+":"+strconv.Itoa(int(link.Port)), &tlsConfig)
 	if err != nil {
@@ -120,6 +121,7 @@ func (link *Link) SendRaw(tunnelID uint32, msgType p2p.Type, msg []byte) (err er
 	if len(msg) > p2p.MaxSize-p2p.HeaderSize {
 		return p2p.ErrInvalidMessage
 	}
+
 	data := link.msgBuf[:]
 	header := p2p.Header{TunnelID: tunnelID, Type: msgType}
 	header.Pack(data[:p2p.HeaderSize])
