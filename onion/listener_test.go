@@ -1,4 +1,4 @@
-package main
+package onion
 
 import (
 	"crypto/rand"
@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"bawang/config"
-	"bawang/onion"
 	"bawang/p2p"
 )
 
@@ -31,7 +30,7 @@ func TestListenOnionSocket(t *testing.T) {
 	hostKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.Nil(t, err)
 	cfg.HostKey = hostKey
-	router := onion.NewRouter(&cfg)
+	router := NewRouter(&cfg)
 
 	errChan := make(chan error)
 	quitChan := make(chan struct{})
@@ -48,14 +47,14 @@ func TestListenOnionSocket(t *testing.T) {
 
 	createMsg := p2p.TunnelCreate{
 		Version:     1,
-		EncDHPubKey: [32]byte{},
+		EncDHPubKey: [512]byte{},
 	}
 	buf := make([]byte, p2p.MaxSize)
 	n, err := p2p.PackMessage(buf, 123, &createMsg)
 	require.Nil(t, err)
 	n, err = conn.Write(buf[:n])
 	require.Nil(t, err)
-	assert.Equal(t, createMsg.PackedSize()+p2p.HeaderSize, n)
+	assert.Equal(t, p2p.MaxSize, n)
 	err = conn.CloseWrite()
 	require.Nil(t, err)
 

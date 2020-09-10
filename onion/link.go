@@ -75,7 +75,6 @@ func (link *Link) connect() (err error) {
 		log.Printf("Error opening tls connection to peer: %v", err)
 		return
 	}
-	defer link.nc.Close()
 
 	link.rd = bufio.NewReader(link.nc)
 
@@ -108,6 +107,7 @@ func (link *Link) RemoveTunnel(tunnelID uint32) {
 
 func (link *Link) Destroy() (err error) {
 	close(link.Quit)
+	err = link.nc.Close()
 	return
 }
 

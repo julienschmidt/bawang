@@ -1,4 +1,4 @@
-package main
+package onion
 
 import (
 	"crypto/rand"
@@ -13,10 +13,9 @@ import (
 	"strconv"
 
 	"bawang/config"
-	"bawang/onion"
 )
 
-func ListenOnionSocket(cfg *config.Config, router *onion.Router, errOut chan error, quit chan struct{}) {
+func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, quit chan struct{}) {
 	// construct tls certificate from p2p hostkey
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)

@@ -31,7 +31,7 @@ type Tunnel struct {
 	ID      uint32
 	Hops    []*Peer
 	Link    *Link
-	Counter uint64
+	Counter uint32
 }
 
 func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err error) {
@@ -75,10 +75,10 @@ type TunnelSegment struct {
 	PrevHopLink     *Link
 	NextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
 	DHShared        *[32]byte // Diffie-Hellman key shared with the previous hop
-	Counter         uint64
+	Counter         uint32
 }
 
-func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH, encDHPubKey *[32]byte, err error) {
+func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *[512]byte, err error) {
 	pubDH, privDH, err := box.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -89,11 +89,11 @@ func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH, encDHPubKey *[32]byte, 
 		return nil, nil, err
 	}
 
-	if len(encDHKey) != 32 {
+	if len(encDHKey) != 512 {
 		return nil, nil, ErrInvalidDHPublicKey
 	}
-	encDHPubKey = new([32]byte)
-	copy(encDHPubKey[:], encDHKey[:32])
+	encDHPubKey = new([512]byte)
+	copy(encDHPubKey[:], encDHKey[:512])
 
 	return privDH, encDHPubKey, nil
 }
@@ -128,7 +128,7 @@ func CreateTunnelExtend(peerHostKey *rsa.PublicKey, address net.IP, port uint16)
 	return privDH, msg, nil
 }
 
-func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
+func HandleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
 	if msg.Version != 1 {
 		return nil, nil, ErrInvalidProtocolVersion
 	}
@@ -160,14 +160,14 @@ func HandleTunnelCreate(msg p2p.TunnelCreate, cfg *config.Config) (dhShared *[32
 	return dhShared, response, nil
 }
 
-func CreateMsgFromExtendMsg(msg p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
+func CreateMsgFromExtendMsg(msg *p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
 	createMsg.EncDHPubKey = msg.EncDHPubKey
 	createMsg.Version = 1 // implement other versions of the handshake protocol here
 
 	return
 }
 
-func ExtendedMsgFromCreatedMsg(msg p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
+func ExtendedMsgFromCreatedMsg(msg *p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
 	extendedMsg.DHPubKey = msg.DHPubKey
 	extendedMsg.SharedKeyHash = msg.SharedKeyHash
 

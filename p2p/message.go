@@ -1,14 +1,16 @@
 package p2p
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"io"
 )
 
 const (
-	HeaderSize = 4 + 1
-	MaxSize    = 512
+	HeaderSize     = 4 + 1
+	MaxSize        = 1024
+	MaxMessageSize = MaxSize - HeaderSize
 )
 
 var (
@@ -57,12 +59,14 @@ func (hdr *Header) Pack(buf []byte) {
 }
 
 func PackMessage(buf []byte, tunnelID uint32, msg Message) (n int, err error) {
-	n = msg.PackedSize() + HeaderSize
+	n = MaxSize // we always pack the full packet such that we pad accordingly
 	header := Header{tunnelID, msg.Type()}
 	header.Pack(buf[:HeaderSize])
 	n2, err := msg.Pack(buf[HeaderSize:n])
-	if n2+HeaderSize != n && err == nil {
+	if n2 != msg.PackedSize() && err == nil {
 		return -1, ErrInvalidMessage
 	}
-	return
+
+	_, err = rand.Read(buf[HeaderSize+n2 : n]) // initialize remaining bytes of the packet with randomness
+	return n, err
 }

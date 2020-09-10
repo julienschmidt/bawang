@@ -36,7 +36,11 @@ type Router struct {
 
 func NewRouter(cfg *config.Config) *Router {
 	return &Router{
-		cfg: cfg,
+		cfg:             cfg,
+		tunnels:         make(map[uint32][]*api.Connection),
+		outgoingTunnels: make(map[uint32]*Tunnel),
+		incomingTunnels: make(map[uint32]*TunnelSegment),
+		apiConnections:  make([]*api.Connection, 0),
 	}
 }
 
@@ -60,6 +64,7 @@ func (r *Router) BuildTunnel(hops []*Peer, apiConn *api.Connection) (tunnel *Tun
 	tunnelID := r.newTunnelID()
 
 	// first we fetch us a link connection to the first hop
+	log.Printf("starting to initialize onion circuit with first hop %v:%v\n", hops[0].Address, hops[0].Port)
 	link, err := r.GetOrCreateLink(hops[0].Address, hops[0].Port)
 	if err != nil {
 		return nil, err
@@ -94,6 +99,8 @@ func (r *Router) BuildTunnel(hops []*Peer, apiConn *api.Connection) (tunnel *Tun
 		if created.hdr.Type != p2p.TypeTunnelCreated {
 			return nil, p2p.ErrInvalidMessage
 		}
+
+		log.Println("received tunnel created")
 
 		createdMsg := p2p.TunnelCreated{}
 		err = createdMsg.Parse(created.payload)
@@ -136,7 +143,7 @@ func (r *Router) BuildTunnel(hops []*Peer, apiConn *api.Connection) (tunnel *Tun
 
 		// layer on encryption
 		packedMsg := msgBuf[:n]
-		for j := len(tunnel.Hops) - 1; j > 1; j-- {
+		for j := len(tunnel.Hops) - 1; j >= 0; j-- {
 			packedMsg, err = p2p.EncryptRelay(packedMsg, &tunnel.Hops[j].DHShared)
 			if err != nil {
 				return nil, err
@@ -357,6 +364,8 @@ func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error)
 
 	r.links = append(r.links, link)
 
+	go r.HandleConnection(link, make(chan error, 1)) // TODO: make this error outputting more sane
+
 	return link, nil
 }
 
@@ -470,6 +479,8 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 	defer r.RemoveTunnel(tunnel.PrevHopTunnelID)
 	defer r.RemoveTunnel(tunnel.NextHopTunnelID)
 
+	buf := make([]byte, p2p.MaxSize)
+
 	for {
 		select {
 		case msg, channelOpen := <-dataChanPrevHop: // we receive a message from the previous hop
@@ -491,7 +502,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 
 				if ok { // relay message is meant for us
 					relayHdr := p2p.RelayHeader{}
-					err = relayHdr.Parse(decryptedRelayMsg)
+					err = relayHdr.Parse(decryptedRelayMsg[:p2p.RelayHeaderSize])
 					if err != nil {
 						return
 					}
@@ -535,7 +546,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 
 					case p2p.RelayTypeTunnelExtend: // this be quite interesting
 						extendMsg := p2p.RelayTunnelExtend{}
-						err = extendMsg.Parse(decryptedRelayMsg)
+						err = extendMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
 						if err != nil {
 							errOut <- err
 							return
@@ -550,7 +561,13 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 
 						tunnel.NextHopLink = nextLink
 						tunnel.NextHopTunnelID = r.newTunnelID()
-						createMsg := CreateMsgFromExtendMsg(extendMsg)
+						err = nextLink.register(tunnel.NextHopTunnelID, dataChanNextHop)
+						if err != nil {
+							errOut <- err
+							return
+						}
+
+						createMsg := CreateMsgFromExtendMsg(&extendMsg)
 						err = tunnel.NextHopLink.Send(tunnel.NextHopTunnelID, &createMsg)
 						if err != nil {
 							errOut <- err
@@ -571,17 +588,16 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 								return
 							}
 
-							extendedMsg := ExtendedMsgFromCreatedMsg(createdMsg)
-							packedExtended := make([]byte, extendedMsg.PackedSize())
+							extendedMsg := ExtendedMsgFromCreatedMsg(&createdMsg)
 							var n int
-							n, err = extendedMsg.Pack(packedExtended)
+							tunnel.Counter, n, err = p2p.PackRelayMessage(buf, tunnel.Counter, &extendedMsg)
 							if err != nil {
 								errOut <- err
 								return
 							}
 
 							var encryptedExtended []byte
-							encryptedExtended, err = p2p.EncryptRelay(packedExtended[:n], tunnel.DHShared)
+							encryptedExtended, err = p2p.EncryptRelay(buf[:n], tunnel.DHShared)
 							if err != nil {
 								errOut <- err
 								return
@@ -694,7 +710,7 @@ func (r *Router) HandleConnection(link *Link, errOut chan error) {
 		}
 
 		// ready message body
-		data := msgBuf[:p2p.MaxSize]
+		data := msgBuf[:p2p.MaxMessageSize]
 		_, err = io.ReadFull(rd, data)
 		if err != nil {
 			errOut <- err
@@ -722,7 +738,7 @@ func (r *Router) HandleConnection(link *Link, errOut chan error) {
 				continue
 			}
 
-			dhShared, tunnelCreated, err := HandleTunnelCreate(msg, r.cfg)
+			dhShared, tunnelCreated, err := HandleTunnelCreate(&msg, r.cfg)
 			if err != nil {
 				log.Printf("Error handling tunnel create message: %v", err)
 				r.RemoveTunnel(hdr.TunnelID)

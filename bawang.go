@@ -38,7 +38,7 @@ func main() {
 	}
 
 	errChanOnion := make(chan error)
-	go ListenOnionSocket(&cfg, router, errChanOnion, quitChan)
+	go onion.ListenOnionSocket(&cfg, router, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)
 	go ListenAPISocket(&cfg, router, rps, errChanAPI, quitChan)

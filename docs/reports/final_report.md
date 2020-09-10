@@ -51,8 +51,8 @@ On top of this link layer we perform authenticated Diffie-Hellman handshakes in 
 For all cryptographic operations we use library functions, mainly from the Go standard library with additional functions for Diffie-Hellman cryptography from the `golang.org/x/crypto` library.
 
 We employ fixed packet size schemes against traffic analysis in two places:
-Packets between links are padded to the fixed size of 512 to prevent information leakage to an outside adversary through the packet sizes.
-Likewise, relayed packets (in `TUNNEL RELAY`) have fixed size 496 (512 minus the message and relay header sizes) to prevent information leakage to an adversary operating a peer used for the tunnel. Thus, the peer cannot for example derive the number of previous hops from the packet size.
+Packets between links are padded to the fixed size of 1024 to prevent information leakage to an outside adversary through the packet sizes.
+Likewise, relayed packets (in `TUNNEL RELAY`) have fixed size 1008 (1024 minus the message and relay header sizes) to prevent information leakage to an adversary operating a peer used for the tunnel. Thus, the peer cannot for example derive the number of previous hops from the packet size.
 
 The relay header contains a digest for end-to-end checksum for integrity checking.
 

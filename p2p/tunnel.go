@@ -3,11 +3,11 @@ package p2p
 // TunnelCreate commands a peer to create a tunnel to a given peer.
 type TunnelCreate struct {
 	Version  uint8
-	Reserved uint8
+	Reserved uint16
 
 	// encrypted next hop Diffie-Hellman pub key used to derive the shared Diffie-Hellman session key
 	// encrypted with the next hops identifier public key for implicit authentication
-	EncDHPubKey [32]byte
+	EncDHPubKey [512]byte
 }
 
 func (msg *TunnelCreate) Type() Type {
@@ -15,8 +15,8 @@ func (msg *TunnelCreate) Type() Type {
 }
 
 func (msg *TunnelCreate) Parse(data []byte) (err error) {
-	const size = 1 + 2 + 32
-	if len(data) != size {
+	const size = 1 + 2 + len(msg.EncDHPubKey)
+	if len(data) < size {
 		return ErrInvalidMessage
 	}
 
@@ -24,13 +24,13 @@ func (msg *TunnelCreate) Parse(data []byte) (err error) {
 
 	// 1 byte reserved
 
-	copy(msg.EncDHPubKey[:], data[3:35])
+	copy(msg.EncDHPubKey[:], data[3:3+len(msg.EncDHPubKey)])
 
 	return nil
 }
 
 func (msg *TunnelCreate) PackedSize() (n int) {
-	return 1 + 2 + 32
+	return 1 + 2 + len(msg.EncDHPubKey)
 }
 
 func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
@@ -44,7 +44,7 @@ func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
 	buf[1] = 0x00 // reserved
 	buf[2] = 0x00 // reserved
 
-	copy(buf[3:35], msg.EncDHPubKey[:])
+	copy(buf[3:3+len(msg.EncDHPubKey)], msg.EncDHPubKey[:])
 
 	return n, nil
 }
@@ -60,7 +60,7 @@ func (msg *TunnelCreated) Type() Type {
 
 func (msg *TunnelCreated) Parse(data []byte) (err error) {
 	const size = 3 + 32 + 32
-	if len(data) != size {
+	if len(data) < size {
 		return ErrInvalidMessage
 	}
 
@@ -97,7 +97,7 @@ func (msg *TunnelDestroy) Type() Type {
 
 func (msg *TunnelDestroy) Parse(data []byte) (err error) {
 	const size = 3 // padding
-	if len(data) != size {
+	if len(data) < size {
 		return ErrInvalidMessage
 	}
 

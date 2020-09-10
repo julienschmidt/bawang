@@ -3,9 +3,10 @@ package p2p
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"math/rand"
+	mathRand "math/rand"
 	"net"
 
 	"bawang/api"
@@ -50,7 +51,7 @@ func (hdr *RelayHeader) Parse(data []byte) (err error) {
 		return ErrInvalidMessage
 	}
 
-	copy(hdr.Counter[:], data[0:3])
+	copy(hdr.Counter[:], data[:3])
 	digestOffset := 7
 
 	hdr.RelayType = RelayType(data[3])
@@ -74,26 +75,39 @@ func (hdr *RelayHeader) Pack(buf []byte) (err error) {
 	return nil
 }
 
-func (hdr *RelayHeader) ComputeDigest(msg []byte) {
+func (hdr *RelayHeader) ComputeDigest(msg []byte) (err error) {
 	copy(hdr.Digest[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) // initialize digest to zero
 	packedHdr := make([]byte, RelayHeaderSize)
+	err = hdr.Pack(packedHdr)
+	if err != nil {
+		return
+	}
 	fullMsg := append(packedHdr, msg...)
 
 	digest := sha256.Sum256(fullMsg)
-	for digest[0] != 0x00 && digest[1] != 0x00 {
-		digest = sha256.Sum256(fullMsg)
-	}
+	// TODO: figure out how we can reintroduce this quick check
+	// for digest[0] != 0x00 && digest[1] != 0x00 {
+	// 	digest = sha256.Sum256(fullMsg)
+	// }
+
 	copy(hdr.Digest[:], digest[:8])
+
+	return err
 }
 
 func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
-	if hdr.Digest[0] != 0x00 || hdr.Digest[1] != 0x00 {
-		return false
-	}
+	// TODO: figure out how we can reintroduce this quick check
+	// if hdr.Digest[0] != 0x00 || hdr.Digest[1] != 0x00 {
+	// 	return false
+	// }
 
 	digest := make([]byte, 8)
 	copy(digest, hdr.Digest[:])
-	hdr.ComputeDigest(msg)
+	err := hdr.ComputeDigest(msg)
+	if err != nil {
+		copy(hdr.Digest[:], digest)
+		return false
+	}
 
 	ok = true
 	for i, v := range digest {
@@ -107,38 +121,45 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	return ok
 }
 
-func PackRelayMessage(buf []byte, counter uint64, msg RelayMessage) (newCounter uint64, n int, err error) {
-	n = msg.PackedSize() + RelayHeaderSize
+func PackRelayMessage(buf []byte, oldCounter uint32, msg RelayMessage) (newCounter uint32, n int, err error) {
+	n = MaxRelayDataSize + RelayHeaderSize
 	if len(buf) < n {
-		return counter, -1, ErrBufferTooSmall
+		return oldCounter, -1, ErrBufferTooSmall
 	}
 
-	// generate random counter, greater than the previous one
-	counter += uint64(rand.Int63n(128)) //nolint:gosec // pseudo-rand is good enough here
+	// generate random oldCounter, greater than the previous one
+	oldCounter += uint32(mathRand.Int31n(64)) //nolint:gosec // pseudo-rand is good enough here
 	byteCounter := make([]byte, 4)
-	binary.BigEndian.PutUint64(byteCounter, counter)
+	binary.BigEndian.PutUint32(byteCounter, oldCounter)
 	ctr := [3]byte{}
-	copy(ctr[:], byteCounter[:3])
-	header := RelayHeader{
+	copy(ctr[:], byteCounter[1:4]) // TODO: is this correct?
+	hdr := RelayHeader{
 		Counter:   ctr,
 		RelayType: msg.Type(),
 		Size:      uint16(msg.PackedSize() + RelayHeaderSize),
 	}
 
-	// initialize the full 512 - HeaderSize bytes of the messages with pseudo randomness
-	rand.Read(buf[RelayHeaderSize:n]) //nolint:gosec // pseudo-rand is good enough here
 	n2, err := msg.Pack(buf[RelayHeaderSize:])
-	if n2+RelayHeaderSize != n && err == nil {
-		return counter, -1, ErrInvalidMessage
+	if n2 != msg.PackedSize() && err == nil {
+		return oldCounter, -1, ErrInvalidMessage
 	}
-	header.ComputeDigest(buf[RelayHeaderSize:])
-
-	err = header.Pack(buf[:RelayHeaderSize])
+	// initialize remaining bytes of the packet with pseudo randomness
+	_, err = rand.Read(buf[RelayHeaderSize+n2 : n])
 	if err != nil {
-		return counter, -1, err
+		return
 	}
 
-	return counter, n, nil
+	err = hdr.ComputeDigest(buf[RelayHeaderSize:n])
+	if err != nil {
+		return oldCounter, -1, err
+	}
+
+	err = hdr.Pack(buf[:RelayHeaderSize])
+	if err != nil {
+		return oldCounter, -1, err
+	}
+
+	return oldCounter, n, nil
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
@@ -198,7 +219,7 @@ type RelayTunnelExtend struct {
 	IPv6        bool
 	Port        uint16
 	Address     net.IP
-	EncDHPubKey [32]byte // encrypted with peer pub key
+	EncDHPubKey [512]byte // encrypted with peer pub key
 }
 
 func (msg *RelayTunnelExtend) Type() RelayType {
@@ -206,19 +227,19 @@ func (msg *RelayTunnelExtend) Type() RelayType {
 }
 
 func (msg *RelayTunnelExtend) Parse(data []byte) (err error) {
-	const minSize = 32 + 2 + 2 + 4
+	const minSize = len(msg.EncDHPubKey) + 2 + 2 + 4
 	if len(data) < minSize {
 		return ErrInvalidMessage
 	}
 
 	msg.IPv6 = data[1]&flagIPv6 > 0
-	msg.Port = binary.BigEndian.Uint16(data[32+2 : 32+2+2])
+	msg.Port = binary.BigEndian.Uint16(data[2:4])
 
 	// read IP address (either 4 bytes if IPv4 or 16 bytes if IPv6)
 	keyOffset := 8
 	if msg.IPv6 {
 		keyOffset = 20
-		if len(data) < keyOffset+32 {
+		if len(data) < keyOffset+len(msg.EncDHPubKey) {
 			return ErrInvalidMessage
 		}
 		msg.Address = api.ReadIP(true, data[4:20])
@@ -227,7 +248,7 @@ func (msg *RelayTunnelExtend) Parse(data []byte) (err error) {
 	}
 
 	// must make a copy!
-	copy(msg.EncDHPubKey[:], data[keyOffset:keyOffset+32])
+	copy(msg.EncDHPubKey[:], data[keyOffset:keyOffset+len(msg.EncDHPubKey)])
 
 	return nil
 }
@@ -322,7 +343,8 @@ func (msg *RelayTunnelData) Type() RelayType {
 }
 
 func (msg *RelayTunnelData) Parse(data []byte) (err error) {
-	msg.Data = data // TODO: need to copy here?
+	msg.Data = make([]byte, len(data))
+	copy(msg.Data, data)
 	return
 }
 

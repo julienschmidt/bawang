@@ -4,8 +4,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/binary"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"net"
 )
@@ -90,27 +88,11 @@ func (msg *OnionTunnelBuild) Pack(buf []byte) (n int, err error) {
 }
 
 func (msg *OnionTunnelBuild) ParseHostKey() (key *rsa.PublicKey, err error) {
-	pemBlock, rest := pem.Decode(msg.DestHostKey)
-	if pemBlock == nil || len(rest) != 0 {
-		return nil, errors.New("invalid pem entry in host key file")
+	key, err = x509.ParsePKCS1PublicKey(msg.DestHostKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hostkey: %v", err)
 	}
-
-	switch pemBlock.Type {
-	case "RSA PUBLIC KEY":
-		key, err = x509.ParsePKCS1PublicKey(pemBlock.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("invalid hostkey: %v", err)
-		}
-		return key, nil
-	case "PUBLIC KEY":
-		key, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("invalid hostkey: %v", err)
-		}
-		return key, nil
-	default:
-		return nil, errors.New("unknown key type")
-	}
+	return key, nil
 }
 
 type OnionTunnelReady struct {

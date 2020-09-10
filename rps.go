@@ -19,6 +19,12 @@ var (
 	errInvalidPeer = errors.New("invalid peer")
 )
 
+type RPSInterface interface {
+	GetPeer() (peer *onion.Peer, err error)
+	Close()
+	connect() (err error)
+}
+
 type RPS struct {
 	cfg *config.Config
 
@@ -28,7 +34,7 @@ type RPS struct {
 	rd     *bufio.Reader
 }
 
-func NewRPS(cfg *config.Config) (r *RPS, err error) {
+func NewRPS(cfg *config.Config) (r RPSInterface, err error) {
 	r = &RPS{
 		cfg: cfg,
 	}
@@ -107,8 +113,10 @@ func (r *RPS) GetPeer() (peer *onion.Peer, err error) {
 		return nil, errInvalidPeer
 	}
 
-	peer.Address = reply.Address
-	peer.Port = port
+	peer = &onion.Peer{
+		Address: reply.Address,
+		Port:    port,
+	}
 	peer.HostKey, err = x509.ParsePKCS1PublicKey(reply.DestHostKey) // TODO: verify
 	if err != nil {
 		log.Printf("Received peer with invalid host key from rps module: %v", err)

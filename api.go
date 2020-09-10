@@ -11,7 +11,7 @@ import (
 	"bawang/onion"
 )
 
-func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, router *onion.Router) {
+func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPSInterface, router *onion.Router) {
 	defer func() {
 		router.RemoveAPIConnection(apiConn)
 		err := apiConn.Terminate()
@@ -151,7 +151,7 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps *RPS, 
 	}
 }
 
-func ListenAPISocket(cfg *config.Config, router *onion.Router, rps *RPS, errOut chan error, quit chan struct{}) {
+func ListenAPISocket(cfg *config.Config, router *onion.Router, rps RPSInterface, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		errOut <- err
