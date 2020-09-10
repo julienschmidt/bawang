@@ -29,7 +29,7 @@ check: gofmt lint
 gofmt:
 # gofmt check
 	@echo "checking formatting..."
-	@test -z "$(gofmt -d -s . | tee /dev/stderr)"
+	@test -z "$(gofmt -d -s ./... | tee /dev/stderr)"
 	@echo "ok"
 
 .PHONY: lint
