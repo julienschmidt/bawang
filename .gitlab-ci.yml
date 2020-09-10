@@ -28,4 +28,3 @@ lint:
   extends: .go-mod
   script:
     - make lint
-  allow_failure: true
