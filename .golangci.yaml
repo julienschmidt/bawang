@@ -45,6 +45,9 @@ linters-settings:
     # disable:
     #   - shadow
 
+  maligned:
+    suggest-new: true
+
   misspell:
     locale: US
     # ignore-words:
@@ -98,6 +101,7 @@ linters:
     - goprintffuncname
     - gosec
     - govet
+    - maligned
     - megacheck
     - misspell
     - nakedret
