@@ -60,7 +60,7 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPSInt
 				peer, err = rps.GetPeer()
 				if err != nil {
 					log.Printf("Error getting random peer: %v\n", err)
-					err = apiConn.SendError(api.TypeOnionTunnelBuild, 0)
+					err = apiConn.SendError(0, api.TypeOnionTunnelBuild)
 					if err != nil {
 						log.Printf("Error sending error: %v\n", err)
 						return
@@ -96,7 +96,7 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPSInt
 
 			err = apiConn.Send(&tunnelCreated)
 			if err != nil {
-				err = apiConn.SendError(api.TypeOnionTunnelBuild, tunnel.ID)
+				err = apiConn.SendError(tunnel.ID, api.TypeOnionTunnelBuild)
 				if err != nil {
 					return
 				}
@@ -124,7 +124,7 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPSInt
 			log.Printf("Sending Data on Onion tunnel %v\n", msg.TunnelID)
 			if err != nil {
 				log.Printf("Error sending onion data on tunnel %v\n", msg.TunnelID)
-				err = apiConn.SendError(api.TypeOnionTunnelData, msg.TunnelID)
+				err = apiConn.SendError(msg.TunnelID, api.TypeOnionTunnelData)
 				if err != nil {
 					return
 				}
@@ -140,7 +140,7 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPSInt
 			err = router.SendCover(msg.CoverSize)
 			if err != nil {
 				log.Println("Error when sending cover traffic")
-				_ = apiConn.SendError(api.TypeOnionCover, 0)
+				_ = apiConn.SendError(0, api.TypeOnionCover)
 				return
 			}
 			log.Println("Onion TunnelID Cover")

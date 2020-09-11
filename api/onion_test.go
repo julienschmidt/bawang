@@ -2,6 +2,7 @@ package api
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -73,6 +74,17 @@ func TestOnionTunnelBuild(t *testing.T) {
 		data := []byte{0, flagIPv6, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		err := msg.Parse(data)
 		require.Equal(t, ErrInvalidMessage, err)
+	})
+
+	t.Run("ParseHostKey invalid", func(t *testing.T) {
+		buildMsg := OnionTunnelBuild{
+			DestHostKey: []byte{19, 20, 21},
+		}
+
+		key, err := buildMsg.ParseHostKey()
+		require.NotNil(t, err)
+		require.True(t, strings.HasPrefix(err.Error(), "invalid hostkey:"))
+		require.Nil(t, key)
 	})
 }
 
