@@ -22,7 +22,7 @@ func (msg *TunnelCreate) Parse(data []byte) (err error) {
 
 	msg.Version = data[0]
 
-	// 1 byte reserved
+	// 2 bytes reserved
 
 	copy(msg.EncDHPubKey[:], data[3:3+len(msg.EncDHPubKey)])
 
@@ -141,11 +141,5 @@ func (msg *TunnelRelay) PackedSize() (n int) {
 }
 
 func (msg *TunnelRelay) Pack(buf []byte) (n int, err error) {
-	n = msg.PackedSize()
-	if cap(buf) < n {
-		return -1, ErrBufferTooSmall
-	}
-	copy(buf[:n], msg.EncData[:])
-
-	return n, nil
+	panic("must use PackRelayMessage instead")
 }
