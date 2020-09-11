@@ -16,7 +16,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 		router.RemoveAPIConnection(conn)
 		err := conn.Terminate()
 		if err != nil {
-			log.Fatalf("Error terminating API conn: %v\n", err)
+			log.Printf("Error terminating API conn: %v\n", err)
 			return
 		}
 	}()
@@ -29,7 +29,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 				// connection closed cleanly
 				return
 			}
-			log.Fatalf("Error reading message: %v\n", err)
+			log.Printf("Error reading message: %v\n", err)
 			return
 		}
 
@@ -135,7 +135,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			log.Println("Onion TunnelID Cover")
 
 		default:
-			log.Fatal("Invalid message type:", msgType)
+			log.Println("Invalid message type:", msgType)
 		}
 	}
 }

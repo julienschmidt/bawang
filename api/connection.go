@@ -26,7 +26,7 @@ func (conn *Connection) ReadMsg() (msgType Type, body []byte, err error) {
 	// read the message header
 	var hdr Header
 	if err = hdr.Read(conn.rd); err != nil {
-		return
+		return 0, nil, err
 	}
 
 	msgType = hdr.Type
@@ -40,7 +40,7 @@ func (conn *Connection) ReadMsg() (msgType Type, body []byte, err error) {
 		}
 		return 0, nil, err
 	}
-	return
+	return msgType, body, nil
 }
 
 // Send packs and sends a given message on the API connection.
