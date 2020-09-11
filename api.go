@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rsa"
 	"io"
 	"log"
 	"net"
@@ -23,7 +24,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 
 	for {
 		// read message from API conn
-		msgType, body, err := conn.ReadMsg()
+		apiMsg, err := conn.ReadMsg()
 		if err != nil {
 			if err == io.EOF {
 				// connection closed cleanly
@@ -34,16 +35,10 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 		}
 
 		// handle message
-		switch msgType {
-		case api.TypeOnionTunnelBuild:
-			var msg api.OnionTunnelBuild
-			err := msg.Parse(body)
-			if err != nil {
-				log.Printf("Error parsing OnionTunnelBuild message body: %v\n", err)
-				continue
-			}
-
-			targetKey, err := msg.ParseHostKey()
+		switch msg := apiMsg.(type) {
+		case *api.OnionTunnelBuild:
+			var targetKey *rsa.PublicKey
+			targetKey, err = msg.ParseHostKey()
 			if err != nil {
 				log.Printf("Error parsing host key: %v\n", err)
 				return
@@ -73,7 +68,8 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			peers = append(peers, targetPeer)
 
 			// instruct onion router to build tunnel with given peers
-			tunnel, err := router.BuildTunnel(peers, conn)
+			var tunnel *onion.Tunnel
+			tunnel, err = router.BuildTunnel(peers, conn)
 			if err != nil {
 				log.Printf("Error building tunnel: %v\n", err)
 				return
@@ -92,23 +88,11 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			}
 			log.Println("Onion TunnelID Build")
 
-		case api.TypeOnionTunnelDestroy:
-			var msg api.OnionTunnelDestroy
-			err := msg.Parse(body)
-			if err != nil {
-				log.Printf("Error parsing OnionTunnelDestroy message body: %v\n", err)
-				return
-			}
+		case *api.OnionTunnelDestroy:
 			router.RemoveAPIConnectionFromTunnel(msg.TunnelID, conn)
 			log.Printf("Destroying Onion tunnel with ID: %v\n", msg.TunnelID)
 
-		case api.TypeOnionTunnelData:
-			var msg api.OnionTunnelData
-			err := msg.Parse(body)
-			if err != nil {
-				log.Printf("Error parsing OnionTunnelData message body: %v\n", err)
-				return
-			}
+		case *api.OnionTunnelData:
 			err = router.SendData(msg.TunnelID, msg.Data)
 			log.Printf("Sending Data on Onion tunnel %v\n", msg.TunnelID)
 			if err != nil {
@@ -119,13 +103,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 				}
 			}
 
-		case api.TypeOnionCover:
-			var msg api.OnionCover
-			err := msg.Parse(body)
-			if err != nil {
-				log.Printf("Error parsing OnionCover message body: %v\n", err)
-				return
-			}
+		case *api.OnionCover:
 			err = router.SendCover(msg.CoverSize)
 			if err != nil {
 				log.Println("Error when sending cover traffic")
@@ -135,7 +113,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			log.Println("Onion TunnelID Cover")
 
 		default:
-			log.Println("Invalid message type:", msgType)
+			log.Println("Invalid message type:", apiMsg.Type())
 		}
 	}
 }

@@ -16,9 +16,9 @@ func TestConnectionReadMsg(t *testing.T) {
 		defer connRecv.Close()
 
 		conn := NewConnection(connRecv)
-		_, body, err := conn.ReadMsg()
+		msg, err := conn.ReadMsg()
 		require.EqualError(t, err, io.EOF.Error())
-		require.Nil(t, body)
+		require.Nil(t, msg)
 	})
 
 	t.Run("short body", func(t *testing.T) {
@@ -38,9 +38,9 @@ func TestConnectionReadMsg(t *testing.T) {
 		}()
 
 		conn := NewConnection(connRecv)
-		_, body, err := conn.ReadMsg()
+		msg, err := conn.ReadMsg()
 		require.EqualError(t, err, io.ErrUnexpectedEOF.Error())
-		require.Nil(t, body)
+		require.Nil(t, msg)
 	})
 
 	t.Run("valid", func(t *testing.T) {
@@ -50,22 +50,23 @@ func TestConnectionReadMsg(t *testing.T) {
 
 		go func() {
 			var buf [64]byte
+
+			var msg OnionCover
 			hdr := Header{
-				Size: 8,
+				Size: uint16(msg.PackedSize()),
 				Type: TypeOnionCover,
 			}
 			hdr.Pack(buf[:])
 			buf[HeaderSize] = 0x11
 			buf[HeaderSize+7] = 0xff
-			connSend.Write(buf[:HeaderSize+8])
+			connSend.Write(buf[:HeaderSize+msg.PackedSize()])
 			connSend.Close()
 		}()
 
 		conn := NewConnection(connRecv)
-		msgType, body, err := conn.ReadMsg()
+		msg, err := conn.ReadMsg()
 		require.Nil(t, err)
-		require.Equal(t, TypeOnionCover, msgType)
-		require.Equal(t, []byte{0x11, 0, 0, 0, 0, 0, 0, 0xff}, body)
+		require.Equal(t, TypeOnionCover, msg.Type())
 	})
 }
 

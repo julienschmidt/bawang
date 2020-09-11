@@ -8,10 +8,13 @@ import (
 )
 
 const (
-	MaxSize    = 2<<15 - 1
-	HeaderSize = 2 + 2
+	MaxSize    = 2<<15 - 1 // Max total size of an API message
+	HeaderSize = 2 + 2     // Size of the header of an API message
 )
 
+const flagIPv6 = 1
+
+// Message abstracts an API message.
 type Message interface {
 	Type() Type
 	Parse(data []byte) error
@@ -25,11 +28,13 @@ var (
 	ErrBufferTooSmall = errors.New("buffer is too small for message")
 )
 
+// Header is the message header of an API message.
 type Header struct {
 	Size uint16
 	Type Type
 }
 
+// Parse parses a message header from the given data.
 func (hdr *Header) Parse(data []byte) (err error) {
 	if len(data) < HeaderSize {
 		err = ErrInvalidMessage
@@ -41,6 +46,7 @@ func (hdr *Header) Parse(data []byte) (err error) {
 	return
 }
 
+// Read reads and parses a message header from the given reader.
 func (hdr *Header) Read(rd io.Reader) (err error) {
 	var header [HeaderSize]byte
 	_, err = io.ReadFull(rd, header[:])
@@ -53,11 +59,13 @@ func (hdr *Header) Read(rd io.Reader) (err error) {
 	return
 }
 
+// Pack serializes the header into bytes.
 func (hdr *Header) Pack(buf []byte) {
 	binary.BigEndian.PutUint16(buf, hdr.Size)
 	binary.BigEndian.PutUint16(buf[2:], uint16(hdr.Type))
 }
 
+// PackMessage serializes a given message into the given bytes buffer.
 func PackMessage(buf []byte, msg Message) (n int, err error) {
 	if msg == nil {
 		return -1, ErrInvalidMessage
@@ -77,6 +85,49 @@ func PackMessage(buf []byte, msg Message) (n int, err error) {
 	return n, nil
 }
 
+// parseMessage allocates the respective message type and parses the given body data into it.
+func parseMessage(msgType Type, body []byte) (Message, error) {
+	switch msgType {
+	case TypeOnionTunnelBuild:
+		msg := new(OnionTunnelBuild)
+		err := msg.Parse(body)
+		return msg, err
+
+	case TypeOnionTunnelReady:
+		msg := new(OnionTunnelReady)
+		err := msg.Parse(body)
+		return msg, err
+
+	case TypeOnionTunnelIncoming:
+		msg := new(OnionTunnelIncoming)
+		err := msg.Parse(body)
+		return msg, err
+
+	case TypeOnionTunnelDestroy:
+		msg := new(OnionTunnelDestroy)
+		err := msg.Parse(body)
+		return msg, err
+
+	case TypeOnionTunnelData:
+		msg := new(OnionTunnelData)
+		err := msg.Parse(body)
+		return msg, err
+
+	case TypeOnionError:
+		msg := new(OnionError)
+		err := msg.Parse(body)
+		return msg, err
+
+	case TypeOnionCover:
+		msg := new(OnionCover)
+		err := msg.Parse(body)
+		return msg, err
+
+	default:
+		return nil, ErrInvalidMessage
+	}
+}
+
 func ReadIP(ipv6 bool, data []byte) net.IP {
 	if ipv6 {
 		return net.IP{
@@ -88,8 +139,6 @@ func ReadIP(ipv6 bool, data []byte) net.IP {
 
 	return net.IP{data[3], data[2], data[1], data[0]}
 }
-
-const flagIPv6 = 1
 
 type portMapping struct {
 	app  AppType

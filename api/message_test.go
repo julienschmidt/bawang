@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"errors"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -128,5 +129,39 @@ func TestPackMessage(t *testing.T) {
 
 		_, err = PackMessage(buf[:], nil)
 		require.Equal(t, ErrInvalidMessage, err)
+	})
+}
+
+func TestParseMessage(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		var buf [MaxSize]byte
+
+		inputs := []Message{
+			&OnionTunnelBuild{
+				IPv6:    false,
+				Address: net.IP{1, 2, 3, 4},
+			},
+			&OnionTunnelReady{},
+			&OnionTunnelIncoming{},
+			&OnionTunnelDestroy{},
+			&OnionTunnelData{},
+			&OnionError{},
+			&OnionCover{},
+		}
+
+		for _, input := range inputs {
+			n, err := input.Pack(buf[:])
+			require.Nil(t, err)
+
+			msg, err := parseMessage(input.Type(), buf[:n])
+			require.Nil(t, err)
+			require.Equal(t, input.Type(), msg.Type())
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		msg, err := parseMessage(0, nil)
+		require.EqualError(t, err, ErrInvalidMessage.Error())
+		require.Nil(t, msg)
 	})
 }
