@@ -29,9 +29,9 @@ type Peer struct {
 
 type Tunnel struct {
 	ID      uint32
+	Counter uint32
 	Hops    []*Peer
 	Link    *Link
-	Counter uint32
 }
 
 func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err error) {
