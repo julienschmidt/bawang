@@ -9,11 +9,69 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConnectionReadMsg(t *testing.T) {
+	t.Run("EOF when closed", func(t *testing.T) {
+		connRecv, connSend := net.Pipe()
+		connSend.Close() // close immediately
+		defer connRecv.Close()
+
+		conn := NewConnection(connRecv)
+		_, body, err := conn.ReadMsg()
+		require.EqualError(t, err, io.EOF.Error())
+		require.Nil(t, body)
+	})
+
+	t.Run("short body", func(t *testing.T) {
+		connRecv, connSend := net.Pipe()
+		defer connSend.Close()
+		defer connRecv.Close()
+
+		go func() {
+			var buf [64]byte
+			hdr := Header{
+				Size: 8,
+				Type: TypeOnionCover,
+			}
+			hdr.Pack(buf[:])
+			connSend.Write(buf[:HeaderSize])
+			connSend.Close()
+		}()
+
+		conn := NewConnection(connRecv)
+		_, body, err := conn.ReadMsg()
+		require.EqualError(t, err, io.ErrUnexpectedEOF.Error())
+		require.Nil(t, body)
+	})
+
+	t.Run("valid", func(t *testing.T) {
+		connRecv, connSend := net.Pipe()
+		defer connSend.Close()
+		defer connRecv.Close()
+
+		go func() {
+			var buf [64]byte
+			hdr := Header{
+				Size: 8,
+				Type: TypeOnionCover,
+			}
+			hdr.Pack(buf[:])
+			buf[HeaderSize] = 0x11
+			buf[HeaderSize+7] = 0xff
+			connSend.Write(buf[:HeaderSize+8])
+			connSend.Close()
+		}()
+
+		conn := NewConnection(connRecv)
+		msgType, body, err := conn.ReadMsg()
+		require.Nil(t, err)
+		require.Equal(t, TypeOnionCover, msgType)
+		require.Equal(t, []byte{0x11, 0, 0, 0, 0, 0, 0, 0xff}, body)
+	})
+}
+
 func TestConnectionSend(t *testing.T) {
 	connSend, connRecv := net.Pipe()
-	conn := Connection{
-		Conn: connSend,
-	}
+	conn := NewConnection(connSend)
 
 	t.Run("nil msg", func(t *testing.T) {
 		err := conn.Send(nil)
@@ -60,9 +118,7 @@ func TestConnectionSend(t *testing.T) {
 
 func TestConnectionSendError(t *testing.T) {
 	connSend, connRecv := net.Pipe()
-	conn := Connection{
-		Conn: connSend,
-	}
+	conn := NewConnection(connSend)
 
 	var n int
 	var sendErr, recvErr error
@@ -108,9 +164,7 @@ func TestConnectionTerminate(t *testing.T) {
 		connSend, connRecv := net.Pipe()
 		defer connSend.Close()
 		defer connRecv.Close()
-		conn := Connection{
-			Conn: connSend,
-		}
+		conn := NewConnection(connSend)
 
 		err := conn.Terminate()
 		require.Nil(t, err)

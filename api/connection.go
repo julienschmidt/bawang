@@ -1,14 +1,46 @@
 package api
 
 import (
+	"bufio"
+	"io"
 	"net"
 )
 
 // Connection abstracts a network connection on the API socket.
 type Connection struct {
-	Conn net.Conn
-
+	nc     net.Conn
+	rd     *bufio.Reader
 	msgBuf [MaxSize]byte
+}
+
+// NewConnection initializes a new API Connection from a given network connection.
+func NewConnection(nc net.Conn) *Connection {
+	return &Connection{
+		nc: nc,
+		rd: bufio.NewReader(nc),
+	}
+}
+
+// ReadMsg reads a message from the underlying network connection and returns its type and message body.
+func (conn *Connection) ReadMsg() (msgType Type, body []byte, err error) {
+	// read the message header
+	var hdr Header
+	if err = hdr.Read(conn.rd); err != nil {
+		return
+	}
+
+	msgType = hdr.Type
+
+	// ready message body
+	body = conn.msgBuf[:hdr.Size]
+	_, err = io.ReadFull(conn.rd, body)
+	if err != nil {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		return 0, nil, err
+	}
+	return
 }
 
 // Send packs and sends a given message on the API connection.
@@ -19,7 +51,7 @@ func (conn *Connection) Send(msg Message) (err error) {
 	}
 
 	data := conn.msgBuf[:n]
-	_, err = conn.Conn.Write(data)
+	_, err = conn.nc.Write(data)
 	return err
 }
 
@@ -33,10 +65,10 @@ func (conn *Connection) SendError(tunnelID uint32, msgType Type) (err error) {
 
 // Terminate terminates the API connection and closes the underlying network connection.
 func (conn *Connection) Terminate() (err error) {
-	if conn.Conn == nil {
+	if conn.nc == nil {
 		return nil
 	}
 
-	conn.Conn.Close()
+	conn.nc.Close()
 	return nil
 }
