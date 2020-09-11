@@ -10,6 +10,7 @@ import (
 
 	"bawang/config"
 	"bawang/onion"
+	"bawang/rps"
 )
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 	}()
 
 	router := onion.NewRouter(&cfg)
-	rps, err := NewRPS(&cfg)
+	rps, err := rps.New(&cfg)
 	if err != nil {
 		log.Fatalf("Error initializing RPS: %v", err)
 	}

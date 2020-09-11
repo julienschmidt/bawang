@@ -9,9 +9,10 @@ import (
 	"bawang/api"
 	"bawang/config"
 	"bawang/onion"
+	"bawang/rps"
 )
 
-func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPS, router *onion.Router) {
+func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps rps.RPS, router *onion.Router) {
 	defer func() {
 		router.RemoveAPIConnection(apiConn)
 		err := apiConn.Terminate()
@@ -151,7 +152,7 @@ func HandleAPIConnection(cfg *config.Config, apiConn *api.Connection, rps RPS, r
 	}
 }
 
-func ListenAPISocket(cfg *config.Config, router *onion.Router, rps RPS, errOut chan error, quit chan struct{}) {
+func ListenAPISocket(cfg *config.Config, router *onion.Router, rps rps.RPS, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		errOut <- err

@@ -1,4 +1,4 @@
-package main
+package rps
 
 import (
 	"bufio"
@@ -34,7 +34,7 @@ type rps struct {
 	rd     *bufio.Reader
 }
 
-func NewRPS(cfg *config.Config) (r RPS, err error) {
+func New(cfg *config.Config) (r RPS, err error) {
 	r = &rps{
 		cfg: cfg,
 	}
