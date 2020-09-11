@@ -59,11 +59,18 @@ func (hdr *Header) Pack(buf []byte) {
 }
 
 func PackMessage(buf []byte, tunnelID uint32, msg Message) (n int, err error) {
+	if msg == nil {
+		return -1, ErrInvalidMessage
+	}
+
 	n = MaxSize // we always pack the full packet such that we pad accordingly
 	header := Header{tunnelID, msg.Type()}
 	header.Pack(buf[:HeaderSize])
 	n2, err := msg.Pack(buf[HeaderSize:n])
-	if n2 != msg.PackedSize() && err == nil {
+	if err != nil {
+		return -1, err
+	}
+	if n2 != msg.PackedSize() {
 		return -1, ErrInvalidMessage
 	}
 
