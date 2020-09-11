@@ -135,7 +135,7 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			log.Println("Onion TunnelID Cover")
 
 		default:
-			log.Fatal("Invalid message type:", hdr.Type)
+			log.Fatal("Invalid message type:", msgType)
 		}
 	}
 }
