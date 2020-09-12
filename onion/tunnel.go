@@ -63,7 +63,7 @@ func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader
 	return relayHdr, nil, false, p2p.ErrInvalidMessage
 }
 
-type TunnelSegment struct {
+type tunnelSegment struct {
 	PrevHopTunnelID uint32
 	NextHopTunnelID uint32
 	PrevHopLink     *Link
@@ -72,57 +72,7 @@ type TunnelSegment struct {
 	Counter         uint32
 }
 
-func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *[512]byte, err error) {
-	pubDH, privDH, err := box.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	encDHKey, err := rsa.EncryptPKCS1v15(rand.Reader, peerHostKey, pubDH[:])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if len(encDHKey) != 512 {
-		return nil, nil, ErrInvalidDHPublicKey
-	}
-	encDHPubKey = new([512]byte)
-	copy(encDHPubKey[:], encDHKey[:512])
-
-	return privDH, encDHPubKey, nil
-}
-
-func CreateTunnelCreate(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.TunnelCreate, err error) {
-	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	msg = &p2p.TunnelCreate{
-		Version:     1,
-		EncDHPubKey: *encDHPubKey,
-	}
-
-	return privDH, msg, nil
-}
-
-func CreateTunnelExtend(peerHostKey *rsa.PublicKey, address net.IP, port uint16) (privDH *[32]byte, msg *p2p.RelayTunnelExtend, err error) {
-	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	msg = &p2p.RelayTunnelExtend{
-		IPv6:        address.To16() != nil, // TODO: figure out if this is hacky or intended
-		Address:     address,
-		Port:        port,
-		EncDHPubKey: *encDHPubKey,
-	}
-
-	return privDH, msg, nil
-}
-
-func HandleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
+func handleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
 	if msg.Version != 1 {
 		return nil, nil, ErrInvalidProtocolVersion
 	}
@@ -154,16 +104,62 @@ func HandleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[3
 	return dhShared, response, nil
 }
 
-func createMsgFromExtendMsg(msg *p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
+func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *[512]byte, err error) {
+	pubDH, privDH, err := box.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	encDHKey, err := rsa.EncryptPKCS1v15(rand.Reader, peerHostKey, pubDH[:])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(encDHKey) != 512 {
+		return nil, nil, ErrInvalidDHPublicKey
+	}
+	encDHPubKey = new([512]byte)
+	copy(encDHPubKey[:], encDHKey[:512])
+
+	return privDH, encDHPubKey, nil
+}
+
+func tunnelCreateMsg(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.TunnelCreate, err error) {
+	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	msg = &p2p.TunnelCreate{
+		Version:     1,
+		EncDHPubKey: *encDHPubKey,
+	}
+	return privDH, msg, nil
+}
+
+func relayTunnelExtendMsg(peerHostKey *rsa.PublicKey, address net.IP, port uint16) (privDH *[32]byte, msg *p2p.RelayTunnelExtend, err error) {
+	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	msg = &p2p.RelayTunnelExtend{
+		IPv6:        address.To16() != nil, // TODO: figure out if this is hacky or intended
+		Address:     address,
+		Port:        port,
+		EncDHPubKey: *encDHPubKey,
+	}
+	return privDH, msg, nil
+}
+
+func tunnelCreateMsgFromRelayTunnelExtendMsg(msg *p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
 	createMsg.EncDHPubKey = msg.EncDHPubKey
 	createMsg.Version = 1 // implement other versions of the handshake protocol here
-
 	return
 }
 
-func extendedMsgFromCreatedMsg(msg *p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
+func relayTunnelExtendedMsgFromTunnelCreatedMsg(msg *p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
 	extendedMsg.DHPubKey = msg.DHPubKey
 	extendedMsg.SharedKeyHash = msg.SharedKeyHash
-
 	return
 }

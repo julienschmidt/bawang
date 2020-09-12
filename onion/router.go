@@ -28,7 +28,7 @@ type Router struct {
 	tunnels map[uint32][]*api.Connection
 
 	outgoingTunnels map[uint32]*Tunnel
-	incomingTunnels map[uint32]*TunnelSegment
+	incomingTunnels map[uint32]*tunnelSegment
 
 	apiConnections []*api.Connection
 }
@@ -40,7 +40,7 @@ func NewRouter(cfg *config.Config) *Router {
 		cfg:             cfg,
 		tunnels:         make(map[uint32][]*api.Connection),
 		outgoingTunnels: make(map[uint32]*Tunnel),
-		incomingTunnels: make(map[uint32]*TunnelSegment),
+		incomingTunnels: make(map[uint32]*tunnelSegment),
 		apiConnections:  []*api.Connection{},
 	}
 }
@@ -79,7 +79,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 	}
 
 	// send a create message to the first hop
-	dhPriv, createMsg, err := CreateTunnelCreate(hops[0].HostKey)
+	dhPriv, createMsg, err := tunnelCreateMsg(hops[0].HostKey)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 
 	// handshake with first hop is done, do the remaining ones
 	for _, hop := range hops[1:] {
-		dhPriv, extendMsg, err := CreateTunnelExtend(hop.HostKey, hop.Address, hop.Port)
+		dhPriv, extendMsg, err := relayTunnelExtendMsg(hop.HostKey, hop.Address, hop.Port)
 		if err != nil {
 			return nil, err
 		}
@@ -365,7 +365,7 @@ func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error)
 
 	r.links = append(r.links, link)
 
-	go r.HandleConnection(link, make(chan error, 1)) // TODO: make this error outputting more sane
+	go r.handleLink(link, make(chan error, 1)) // TODO: make this error outputting more sane
 
 	return link, nil
 }
@@ -465,7 +465,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 	}
 }
 
-func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
+func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	// This is the handler go routine for incoming tunnels that either are terminated by us or where we are just
 	// an in-between hop. The handshake of the previous hop to us is assumed to be done we can, however, receive
 	// TunnelExtend commands.
@@ -568,7 +568,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 							return
 						}
 
-						createMsg := createMsgFromExtendMsg(&extendMsg)
+						createMsg := tunnelCreateMsgFromRelayTunnelExtendMsg(&extendMsg)
 						err = tunnel.NextHopLink.Send(tunnel.NextHopTunnelID, &createMsg)
 						if err != nil {
 							errOut <- err
@@ -589,7 +589,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 								return
 							}
 
-							extendedMsg := extendedMsgFromCreatedMsg(&createdMsg)
+							extendedMsg := relayTunnelExtendedMsgFromTunnelCreatedMsg(&createdMsg)
 							var n int
 							tunnel.Counter, n, err = p2p.PackRelayMessage(buf, tunnel.Counter, &extendedMsg)
 							if err != nil {
@@ -693,7 +693,7 @@ func (r *Router) HandleTunnelSegment(tunnel *TunnelSegment, errOut chan error) {
 	}
 }
 
-func (r *Router) HandleConnection(link *Link, errOut chan error) {
+func (r *Router) handleLink(link *Link, errOut chan error) {
 	var msgBuf [p2p.MaxSize]byte
 	rd := bufio.NewReader(link.nc)
 
@@ -739,7 +739,7 @@ func (r *Router) HandleConnection(link *Link, errOut chan error) {
 				continue
 			}
 
-			dhShared, tunnelCreated, err := HandleTunnelCreate(&msg, r.cfg)
+			dhShared, tunnelCreated, err := handleTunnelCreate(&msg, r.cfg)
 			if err != nil {
 				log.Printf("Error handling tunnel create message: %v", err)
 				r.RemoveTunnel(hdr.TunnelID)
@@ -752,7 +752,7 @@ func (r *Router) HandleConnection(link *Link, errOut chan error) {
 			}
 			r.tunnels[hdr.TunnelID] = make([]*api.Connection, 0)
 
-			receivingTunnel := TunnelSegment{
+			receivingTunnel := tunnelSegment{
 				PrevHopTunnelID: hdr.TunnelID,
 				PrevHopLink:     link,
 				DHShared:        dhShared,
@@ -765,7 +765,7 @@ func (r *Router) HandleConnection(link *Link, errOut chan error) {
 			}
 
 			// now we start the normal message handling for this tunnel
-			go r.HandleTunnelSegment(&receivingTunnel, errOut)
+			go r.handleTunnelSegment(&receivingTunnel, errOut)
 		}
 	}
 }

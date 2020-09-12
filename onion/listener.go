@@ -2,6 +2,7 @@ package onion
 
 import (
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -16,75 +17,26 @@ import (
 )
 
 func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, quit chan struct{}) {
-	// construct tls certificate from p2p hostkey
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	cert, err := tlsCertFromHostKey(cfg.HostKey)
 	if err != nil {
-		log.Printf("Failed to generate serial number: %v\n", err)
 		errOut <- err
 		return
 	}
-
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			Organization: []string{"Voidphone"},
-		},
-
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, cfg.HostKey.Public(), cfg.HostKey)
-	if err != nil {
-		log.Printf("Failed to create certificate: %v\n", err)
-		errOut <- err
-		return
-	}
-
-	privBytes, err := x509.MarshalPKCS8PrivateKey(cfg.HostKey)
-	if err != nil {
-		log.Printf("Failed to create certificate: %v\n", err)
-		errOut <- err
-		return
-	}
-
-	certPem := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: derBytes,
-	})
-
-	privPem := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: privBytes,
-	})
-
-	cert, err := tls.X509KeyPair(certPem, privPem)
-	if err != nil {
-		log.Printf("Failed to create server key pair: %v\n", err)
-		errOut <- err
-		return
-	}
-
-	certs := []tls.Certificate{cert}
 
 	tlsConfig := tls.Config{
-		Certificates:       certs,
+		Certificates:       []tls.Certificate{cert},
 		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
 	}
 	ln, err := tls.Listen("tcp", fmt.Sprintf("%s:%d", cfg.P2PHostname, cfg.P2PPort), &tlsConfig)
 	if err != nil {
 		errOut <- err
-		log.Printf("Failed to open tls connection: %v\n", err)
+		log.Printf("Failed to open TLS connection: %v\n", err)
 		return
 	}
 	defer ln.Close()
 	log.Printf("Onion Server Listening at %v:%v\n", cfg.P2PHostname, cfg.P2PPort)
 
 	goRoutineErrOut := make(chan error, 10)
-
 	for {
 		select {
 		case <-quit:
@@ -117,7 +69,7 @@ func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, qu
 
 		tlsConn, ok := conn.(*tls.Conn)
 		if !ok {
-			log.Printf("Invalid tls connection from peer %v:%v\n", ip, port)
+			log.Printf("Invalid TLS connection from peer %v:%v\n", ip, port)
 			continue
 		}
 
@@ -129,6 +81,57 @@ func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, qu
 			continue
 		}
 
-		go router.HandleConnection(link, goRoutineErrOut)
+		go router.handleLink(link, goRoutineErrOut)
 	}
+}
+
+func tlsCertFromHostKey(hostKey *rsa.PrivateKey) (cert tls.Certificate, err error) {
+	// construct tls certificate from p2p hostkey
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		log.Printf("Failed to generate serial number: %v\n", err)
+		return cert, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Voidphone"},
+		},
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, hostKey.Public(), hostKey)
+	if err != nil {
+		log.Printf("Failed to create certificate: %v\n", err)
+		return cert, err
+	}
+
+	privBytes, err := x509.MarshalPKCS8PrivateKey(hostKey)
+	if err != nil {
+		log.Printf("Failed to create certificate: %v\n", err)
+		return cert, err
+	}
+
+	certPem := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: derBytes,
+	})
+
+	privPem := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privBytes,
+	})
+
+	cert, err = tls.X509KeyPair(certPem, privPem)
+	if err != nil {
+		log.Printf("Failed to create server key pair: %v\n", err)
+		return cert, err
+	}
+	return cert, nil
 }

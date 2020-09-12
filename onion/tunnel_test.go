@@ -76,7 +76,7 @@ func TestHandleTunnelCreate(t *testing.T) {
 	peerKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.Nil(t, err)
 
-	privDH, msgCreate, err := CreateTunnelCreate(&rsa.PublicKey{N: peerKey.N, E: peerKey.E})
+	privDH, msgCreate, err := tunnelCreateMsg(&rsa.PublicKey{N: peerKey.N, E: peerKey.E})
 	require.Nil(t, err)
 	require.NotNil(t, privDH)
 
@@ -84,7 +84,7 @@ func TestHandleTunnelCreate(t *testing.T) {
 		HostKey: peerKey,
 	}
 
-	dhShared, response, err := HandleTunnelCreate(msgCreate, cfg)
+	dhShared, response, err := handleTunnelCreate(msgCreate, cfg)
 	require.Nil(t, err)
 	require.NotNil(t, dhShared)
 	require.NotNil(t, response)
