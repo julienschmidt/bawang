@@ -12,6 +12,8 @@ import (
 	"bawang/rps"
 )
 
+type Peer = rps.Peer
+
 func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, router *onion.Router) {
 	defer func() {
 		router.RemoveAPIConnection(conn)
@@ -44,16 +46,16 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 				return
 			}
 
-			targetPeer := &onion.Peer{
+			targetPeer := &Peer{
 				Port:    msg.OnionPort,
 				Address: msg.Address,
 				HostKey: targetKey,
 			}
 
 			// sample intermediate peers
-			peers := make([]*onion.Peer, cfg.TunnelLength, 0)
+			peers := make([]*Peer, cfg.TunnelLength, 0)
 			for i := 0; i < cfg.TunnelLength-1; i++ {
-				var peer *onion.Peer
+				var peer *Peer
 				peer, err = rps.GetPeer()
 				if err != nil {
 					log.Printf("Error getting random peer: %v\n", err)

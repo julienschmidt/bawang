@@ -2,6 +2,7 @@ package rps
 
 import (
 	"bufio"
+	"crypto/rsa"
 	"crypto/x509"
 	"errors"
 	"io"
@@ -12,15 +13,21 @@ import (
 
 	"bawang/api"
 	"bawang/config"
-	"bawang/onion"
 )
 
 var (
 	errInvalidPeer = errors.New("invalid peer")
 )
 
+type Peer struct {
+	DHShared [32]byte
+	Port     uint16
+	Address  net.IP
+	HostKey  *rsa.PublicKey
+}
+
 type RPS interface {
-	GetPeer() (peer *onion.Peer, err error)
+	GetPeer() (peer *Peer, err error)
 	Close()
 	connect() (err error)
 }
@@ -61,7 +68,7 @@ func (r *rps) Close() {
 	}
 }
 
-func (r *rps) GetPeer() (peer *onion.Peer, err error) {
+func (r *rps) GetPeer() (peer *Peer, err error) {
 	// concurrent IO not such a great idea
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -113,7 +120,7 @@ func (r *rps) GetPeer() (peer *onion.Peer, err error) {
 		return nil, errInvalidPeer
 	}
 
-	peer = &onion.Peer{
+	peer = &Peer{
 		Address: reply.Address,
 		Port:    port,
 	}

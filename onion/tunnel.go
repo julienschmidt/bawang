@@ -11,6 +11,7 @@ import (
 
 	"bawang/config"
 	"bawang/p2p"
+	"bawang/rps"
 )
 
 var (
@@ -20,17 +21,10 @@ var (
 	ErrMisbehavingPeer        = errors.New("a peer is sending invalid messages or violating protocol")
 )
 
-type Peer struct {
-	DHShared [32]byte
-	Port     uint16
-	Address  net.IP
-	HostKey  *rsa.PublicKey
-}
-
 type Tunnel struct {
 	ID      uint32
 	Counter uint32
-	Hops    []*Peer
+	Hops    []*rps.Peer
 	Link    *Link
 }
 
@@ -160,14 +154,14 @@ func HandleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[3
 	return dhShared, response, nil
 }
 
-func CreateMsgFromExtendMsg(msg *p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
+func createMsgFromExtendMsg(msg *p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
 	createMsg.EncDHPubKey = msg.EncDHPubKey
 	createMsg.Version = 1 // implement other versions of the handshake protocol here
 
 	return
 }
 
-func ExtendedMsgFromCreatedMsg(msg *p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
+func extendedMsgFromCreatedMsg(msg *p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
 	extendedMsg.DHPubKey = msg.DHPubKey
 	extendedMsg.SharedKeyHash = msg.SharedKeyHash
 

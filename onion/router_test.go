@@ -11,6 +11,7 @@ import (
 
 	"bawang/api"
 	"bawang/config"
+	"bawang/rps"
 )
 
 func TestRouter_BuildTunnel(t *testing.T) {
@@ -48,7 +49,7 @@ func TestRouter_BuildTunnel(t *testing.T) {
 	time.Sleep(1 * time.Second) // annoyingly wait for the sockets to fully start
 
 	apiConn := &api.Connection{}
-	peers := []*Peer{
+	peers := []*rps.Peer{
 		{Port: uint16(cfgPeer2.P2PPort), Address: net.ParseIP(cfgPeer2.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer2.HostKey.N, E: cfgPeer2.HostKey.E}},
 		{Port: uint16(cfgPeer3.P2PPort), Address: net.ParseIP(cfgPeer3.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer3.HostKey.N, E: cfgPeer3.HostKey.E}},
 		{Port: uint16(cfgPeer4.P2PPort), Address: net.ParseIP(cfgPeer4.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer4.HostKey.N, E: cfgPeer4.HostKey.E}},

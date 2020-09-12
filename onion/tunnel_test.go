@@ -12,6 +12,7 @@ import (
 
 	"bawang/config"
 	"bawang/p2p"
+	"bawang/rps"
 )
 
 func TestEncryptDecryptRelayMsg(t *testing.T) {
@@ -22,7 +23,7 @@ func TestEncryptDecryptRelayMsg(t *testing.T) {
 	require.Nil(t, err)
 	_, err = rand.Read(dhShared3[:])
 	require.Nil(t, err)
-	peers := []*Peer{
+	peers := []*rps.Peer{
 		{DHShared: dhShared1},
 		{DHShared: dhShared2},
 		{DHShared: dhShared3},

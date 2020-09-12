@@ -19,8 +19,8 @@ var (
 )
 
 type message struct {
-	hdr     p2p.Header
-	payload []byte
+	hdr  p2p.Header
+	body []byte
 }
 
 type Link struct {
@@ -91,13 +91,13 @@ func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 	return nil
 }
 
-func (link *Link) HasTunnel(tunnelID uint32) (ok bool) {
+func (link *Link) hasTunnel(tunnelID uint32) (ok bool) {
 	_, ok = link.dataOut[tunnelID]
 
 	return
 }
 
-func (link *Link) RemoveTunnel(tunnelID uint32) {
+func (link *Link) removeTunnel(tunnelID uint32) {
 	if _, ok := link.dataOut[tunnelID]; ok {
 		close(link.dataOut[tunnelID])
 	}
@@ -105,25 +105,22 @@ func (link *Link) RemoveTunnel(tunnelID uint32) {
 	// TODO: if there are no more listeners on this link we shut it down
 }
 
-func (link *Link) Destroy() (err error) {
+func (link *Link) destroy() (err error) {
 	close(link.Quit)
 	err = link.nc.Close()
 	return
 }
 
-func (link *Link) SendDestroyTunnel(tunnelID uint32) (err error) {
-	destroyMsg := p2p.TunnelDestroy{}
-	err = link.Send(tunnelID, &destroyMsg)
-	return
-}
-
-func (link *Link) SendRaw(tunnelID uint32, msgType p2p.Type, msg []byte) (err error) {
+func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 	if len(msg) > p2p.MaxSize-p2p.HeaderSize {
 		return p2p.ErrInvalidMessage
 	}
 
 	data := link.msgBuf[:]
-	header := p2p.Header{TunnelID: tunnelID, Type: msgType}
+	header := p2p.Header{
+		TunnelID: tunnelID,
+		Type:     p2p.TypeTunnelRelay,
+	}
 	header.Pack(data[:p2p.HeaderSize])
 	copy(data[p2p.HeaderSize:len(msg)+p2p.HeaderSize], msg)
 
@@ -145,4 +142,10 @@ func (link *Link) Send(tunnelID uint32, msg p2p.Message) (err error) {
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
 	return err
+}
+
+func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
+	destroyMsg := p2p.TunnelDestroy{}
+	err = link.Send(tunnelID, &destroyMsg)
+	return
 }
