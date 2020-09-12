@@ -79,11 +79,11 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 
 			// send confirmation
 			err = conn.Send(&api.OnionTunnelReady{
-				TunnelID:    tunnel.ID,
+				TunnelID:    tunnel.ID(),
 				DestHostKey: msg.DestHostKey,
 			})
 			if err != nil {
-				err = conn.SendError(tunnel.ID, api.TypeOnionTunnelBuild)
+				err = conn.SendError(tunnel.ID(), api.TypeOnionTunnelBuild)
 				if err != nil {
 					return
 				}

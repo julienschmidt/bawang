@@ -24,8 +24,8 @@ type message struct {
 }
 
 type Link struct {
-	Address net.IP
-	Port    uint16
+	address net.IP
+	port    uint16
 
 	l      sync.Mutex // guards fields below
 	msgBuf [p2p.MaxSize]byte
@@ -39,8 +39,8 @@ type Link struct {
 
 func newLink(address net.IP, port uint16) (link *Link, err error) {
 	link = &Link{
-		Address: address,
-		Port:    port,
+		address: address,
+		port:    port,
 		dataOut: make(map[uint32]chan message),
 		Quit:    make(chan struct{}),
 	}
@@ -55,8 +55,8 @@ func newLink(address net.IP, port uint16) (link *Link, err error) {
 
 func newLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *Link) {
 	return &Link{
-		Address: address,
-		Port:    port,
+		address: address,
+		port:    port,
 		nc:      conn,
 		rd:      bufio.NewReader(conn),
 		dataOut: make(map[uint32]chan message),
@@ -70,7 +70,7 @@ func (link *Link) connect() (err error) {
 	}
 
 	// TODO: implement host key checking here
-	link.nc, err = tls.Dial("tcp", link.Address.String()+":"+strconv.Itoa(int(link.Port)), &tlsConfig)
+	link.nc, err = tls.Dial("tcp", link.address.String()+":"+strconv.Itoa(int(link.port)), &tlsConfig)
 	if err != nil {
 		log.Printf("Error opening tls connection to peer: %v", err)
 		return
@@ -130,7 +130,13 @@ func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 	return err
 }
 
-func (link *Link) Send(tunnelID uint32, msg p2p.Message) (err error) {
+func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
+	destroyMsg := p2p.TunnelDestroy{}
+	err = link.sendMsg(tunnelID, &destroyMsg)
+	return
+}
+
+func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
 	data := link.msgBuf[:]
 	n, err := p2p.PackMessage(data, tunnelID, msg)
 	if err != nil {
@@ -142,10 +148,4 @@ func (link *Link) Send(tunnelID uint32, msg p2p.Message) (err error) {
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
 	return err
-}
-
-func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
-	destroyMsg := p2p.TunnelDestroy{}
-	err = link.Send(tunnelID, &destroyMsg)
-	return
 }

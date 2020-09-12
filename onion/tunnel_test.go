@@ -29,8 +29,8 @@ func TestEncryptDecryptRelayMsg(t *testing.T) {
 		{DHShared: dhShared3},
 	}
 	tunnel := Tunnel{
-		Hops: peers,
-		ID:   1234,
+		hops: peers,
+		id:   1234,
 	}
 
 	payload := []byte("asdf1234")

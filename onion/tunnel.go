@@ -22,15 +22,19 @@ var (
 )
 
 type Tunnel struct {
-	ID      uint32
-	Counter uint32
-	Hops    []*rps.Peer
-	Link    *Link
+	id      uint32
+	counter uint32
+	hops    []*rps.Peer
+	link    *Link
+}
+
+func (tunnel *Tunnel) ID() uint32 {
+	return tunnel.id
 }
 
 func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err error) {
 	encryptedMsg = relayMsg
-	for _, hop := range tunnel.Hops {
+	for _, hop := range tunnel.hops {
 		encryptedMsg, err = p2p.EncryptRelay(encryptedMsg, &hop.DHShared)
 		if err != nil { // error when decrypting
 			return
@@ -41,7 +45,7 @@ func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err
 
 func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader, decryptedRelayMsg []byte, ok bool, err error) {
 	decryptedRelayMsg = data
-	for _, hop := range tunnel.Hops {
+	for _, hop := range tunnel.hops {
 		ok, decryptedRelayMsg, err = p2p.DecryptRelay(decryptedRelayMsg, &hop.DHShared)
 		if err != nil { // error when decrypting
 			return
@@ -64,12 +68,12 @@ func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader
 }
 
 type tunnelSegment struct {
-	PrevHopTunnelID uint32
-	NextHopTunnelID uint32
-	PrevHopLink     *Link
-	NextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
-	DHShared        *[32]byte // Diffie-Hellman key shared with the previous hop
-	Counter         uint32
+	prevHopTunnelID uint32
+	nextHopTunnelID uint32
+	prevHopLink     *Link
+	nextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
+	dhShared        *[32]byte // Diffie-Hellman key shared with the previous hop
+	counter         uint32
 }
 
 func handleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {

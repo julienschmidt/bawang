@@ -59,8 +59,8 @@ func TestRouter_BuildTunnel(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, tunnel)
 
-	assert.Equal(t, 3, len(tunnel.Hops))
-	assert.NotNil(t, tunnel.Hops[0].DHShared)
-	assert.NotNil(t, tunnel.Hops[1].DHShared)
-	assert.NotNil(t, tunnel.Hops[2].DHShared)
+	assert.Equal(t, 3, len(tunnel.hops))
+	assert.NotNil(t, tunnel.hops[0].DHShared)
+	assert.NotNil(t, tunnel.hops[1].DHShared)
+	assert.NotNil(t, tunnel.hops[2].DHShared)
 }
