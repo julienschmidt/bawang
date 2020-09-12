@@ -54,7 +54,7 @@ The header specifies the tunnel ID of the tunnel the message is addressed to and
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 | TUNNEL CREATE |    Version    |      Reserved / Padding       |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|         Encrypted Diffie-Hellman Public Key  (512 byte)        |
+|         Encrypted Diffie-Hellman Public Key  (512 byte)       |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
@@ -166,7 +166,7 @@ Afterwards the sender iteratively encrypts the relay sub message with the epheme
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |    Next Hop IP Address (IPv4 - 32 bits, IPv6 - 128 bits)      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|        Encrypted Diffie-Hellman Public Key  (512 byte)         |
+|        Encrypted Diffie-Hellman Public Key  (512 byte)        |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
