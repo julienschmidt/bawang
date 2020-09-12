@@ -25,6 +25,15 @@ type Config struct {
 	HostKey         *rsa.PrivateKey
 }
 
+var (
+	errMissingHostKey  = errors.New("missing config file entry: [onion] hostkey")
+	errMissingHostname = errors.New("missing config file entry: [onion] p2p_hostname")
+	errMissingPort     = errors.New("missing config file entry: [onion] p2p_port")
+
+	errInvalidHostKeyPem = errors.New("invalid PEM entry in host key file")
+	errUnknownKeyType    = errors.New("unknown key type")
+)
+
 func (config *Config) FromFile(path string) error {
 	cfg, err := ini.Load(path)
 	if err != nil {
@@ -43,7 +52,7 @@ func (config *Config) FromFile(path string) error {
 
 	hostKeyFile := cfg.Section("onion").Key("hostkey").String()
 	if hostKeyFile == "" {
-		return errors.New("missing config file entry: [onion] hostkey")
+		return errMissingHostKey
 	}
 
 	data, err := ioutil.ReadFile(hostKeyFile)
@@ -51,38 +60,46 @@ func (config *Config) FromFile(path string) error {
 		return fmt.Errorf("could not read host key file: %v", err)
 	}
 
+	config.HostKey, err = parseHostKey(data)
+	if err != nil {
+		return err
+	}
+
+	if config.P2PHostname == "" {
+		return errMissingHostname
+	}
+
+	if config.P2PPort == 0 {
+		return errMissingPort
+	}
+
+	return nil
+}
+
+func parseHostKey(data []byte) (key *rsa.PrivateKey, err error) {
 	pemBlock, rest := pem.Decode(data)
 	if pemBlock == nil || len(rest) != 0 {
-		return errors.New("invalid pem entry in host key file")
+		return nil, errInvalidHostKeyPem
 	}
 
 	switch pemBlock.Type {
 	case "RSA PRIVATE KEY":
-		config.HostKey, err = x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+		key, err = x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
 		if err != nil {
-			return fmt.Errorf("invalid hostkey: %v", err)
+			return nil, fmt.Errorf("invalid hostkey: %v", err)
 		}
+		return key, nil
 	case "PRIVATE KEY":
-		key, err := x509.ParsePKCS8PrivateKey(pemBlock.Bytes)
+		var privKey interface{}
+		privKey, err = x509.ParsePKCS8PrivateKey(pemBlock.Bytes)
 		if err != nil {
-			return fmt.Errorf("invalid hostkey: %v", err)
+			return nil, fmt.Errorf("invalid hostkey: %v", err)
 		}
-		if rsaKey, ok := key.(*rsa.PrivateKey); ok {
-			config.HostKey = rsaKey
-		} else {
-			return errors.New("hostkey is not an RSA key")
+		if rsaKey, ok := privKey.(*rsa.PrivateKey); ok {
+			return rsaKey, nil
 		}
+		return nil, errors.New("invalid hostkey: hostkey is not an RSA key")
 	default:
-		return errors.New("unknown key type")
+		return nil, errUnknownKeyType
 	}
-
-	if config.P2PHostname == "" {
-		return errors.New("missing config file entry: [onion] p2p_hostname")
-	}
-
-	if config.P2PPort == 0 {
-		return errors.New("missing config file entry: [onion] p2p_port")
-	}
-
-	return nil
 }
