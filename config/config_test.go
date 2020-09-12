@@ -181,5 +181,4 @@ oO/NmwIRALS6sVkJzVYZkEbbm8uiz3cCEQCtgDiyrY8vBj3b/kL3N0ZDAhBH4lX1
 `))
 	require.Nil(t, err)
 	require.NotNil(t, key)
-
 }
