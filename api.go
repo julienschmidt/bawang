@@ -16,11 +16,13 @@ type Peer = rps.Peer
 
 func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, router *onion.Router) {
 	defer func() {
-		router.RemoveAPIConnection(conn)
-		err := conn.Terminate()
+		err := router.RemoveAPIConnection(conn)
 		if err != nil {
 			log.Printf("Error terminating API conn: %v\n", err)
-			return
+		}
+		err = conn.Terminate()
+		if err != nil {
+			log.Printf("Error terminating API conn: %v\n", err)
 		}
 	}()
 
@@ -91,8 +93,15 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			log.Println("Onion TunnelID Build")
 
 		case *api.OnionTunnelDestroy:
-			router.RemoveAPIConnectionFromTunnel(msg.TunnelID, conn)
 			log.Printf("Destroying Onion tunnel with ID: %v\n", msg.TunnelID)
+			err = router.RemoveAPIConnectionFromTunnel(msg.TunnelID, conn)
+			if err != nil {
+				log.Printf("Error destrying Onion tunnel with ID: %v\n", msg.TunnelID)
+				err = conn.SendError(msg.TunnelID, api.TypeOnionTunnelDestroy)
+				if err != nil {
+					return
+				}
+			}
 
 		case *api.OnionTunnelData:
 			err = router.SendData(msg.TunnelID, msg.Data)

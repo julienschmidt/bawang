@@ -69,6 +69,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 	tunnel = &Tunnel{
 		link: link,
 		id:   tunnelID,
+		quit: make(chan struct{}),
 	}
 
 	// now we register a output channel for this link
@@ -197,6 +198,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 
 	r.tunnels[tunnel.id] = append(r.tunnels[tunnel.id], apiConn)
 	r.outgoingTunnels[tunnel.id] = tunnel
+	go r.HandleOutgoingTunnel(tunnel, dataOut)
 	return tunnel, nil
 }
 
@@ -256,7 +258,10 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 			if sendError != nil {
 				log.Printf("Error terminating API conn: %v\n", sendError)
 			}
-			r.RemoveAPIConnection(apiConn)
+			removeErr := r.RemoveAPIConnection(apiConn)
+			if removeErr != nil {
+				log.Printf("Error removing API conn: %v\n", removeErr)
+			}
 		}
 	}
 
@@ -271,31 +276,46 @@ func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
 			if sendError != nil {
 				log.Printf("Error terminating API conn: %v\n", sendError)
 			}
-			r.RemoveAPIConnection(apiConn)
+			removeErr := r.RemoveAPIConnection(apiConn)
+			if removeErr != nil {
+				log.Printf("Error removing API conn: %v\n", removeErr)
+			}
 		}
 	}
 
 	return nil
 }
 
-func (r *Router) RegisterIncomingConnection(tunnelID uint32) (err error) {
-	if _, ok := r.tunnels[tunnelID]; !ok {
+func (r *Router) sendDataToAPI(tunnelID uint32, data []byte) (err error) {
+	apiMessage := api.OnionTunnelData{
+		TunnelID: tunnelID,
+		Data:     data,
+	}
+
+	// currently, we only only get an error if the tunnel ID is invalid
+	err = r.sendMsgToAPI(tunnelID, &apiMessage)
+	return err
+}
+
+func (r *Router) RegisterIncomingConnection(tunnel *tunnelSegment) (err error) {
+	if _, ok := r.tunnels[tunnel.prevHopTunnelID]; !ok {
 		return ErrInvalidTunnel
 	}
 
-	r.tunnels[tunnelID] = make([]*api.Connection, len(r.apiConnections))
-	copy(r.tunnels[tunnelID], r.apiConnections)
+	r.tunnels[tunnel.prevHopTunnelID] = make([]*api.Connection, len(r.apiConnections))
+	copy(r.tunnels[tunnel.prevHopTunnelID], r.apiConnections)
+	r.incomingTunnels[tunnel.prevHopTunnelID] = tunnel
 
 	incomingMsg := api.OnionTunnelIncoming{
-		TunnelID: tunnelID,
+		TunnelID: tunnel.prevHopTunnelID,
 	}
 
 	return r.sendMsgToAllAPI(&incomingMsg)
 }
 
-func (r *Router) RemoveAPIConnection(apiConn *api.Connection) {
+func (r *Router) RemoveAPIConnection(apiConn *api.Connection) (err error) {
 	for tunnelID := range r.tunnels {
-		r.RemoveAPIConnectionFromTunnel(tunnelID, apiConn)
+		err = r.RemoveAPIConnectionFromTunnel(tunnelID, apiConn)
 	}
 
 	for i, conn := range r.apiConnections {
@@ -304,9 +324,11 @@ func (r *Router) RemoveAPIConnection(apiConn *api.Connection) {
 			break
 		}
 	}
+
+	return err
 }
 
-func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) {
+func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) (err error) {
 	if _, ok := r.tunnels[tunnelID]; !ok {
 		return
 	}
@@ -317,6 +339,16 @@ func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 			break
 		}
 	}
+
+	if len(r.tunnels[tunnelID]) == 0 { // the last api connection unregistered, we tear down the tunnel now
+		if outgoingTunnel, ok := r.outgoingTunnels[tunnelID]; ok {
+			err = outgoingTunnel.Close()
+		} else if incomingTunnel, ok := r.incomingTunnels[tunnelID]; ok {
+			err = incomingTunnel.Close()
+		}
+	}
+
+	return err
 }
 
 func (r *Router) newTunnelID() (tunnelID uint32) {
@@ -355,6 +387,9 @@ func (r *Router) RemoveTunnel(tunnelID uint32) {
 	}
 
 	delete(r.tunnels, tunnelID)
+	delete(r.outgoingTunnels, tunnelID)
+	delete(r.incomingTunnels, tunnelID)
+	// log.Printf("removing tunnel with ID %v from router\n", tunnelID)
 }
 
 func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error) {
@@ -397,11 +432,13 @@ func (r *Router) GetOrCreateLink(address net.IP, port uint16) (link *Link, err e
 	return r.CreateLink(address, port)
 }
 
-func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errOut chan error) {
+func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 	// This is the handler go routine for outgoing tunnels that we initiated.
 	// It is assumed that the handshake with the peers is completed and the tunnel is fully initiated at this point!
-	defer tunnel.link.removeTunnel(tunnel.id)
-	defer r.RemoveTunnel(tunnel.id)
+	defer func() {
+		tunnel.link.removeTunnel(tunnel.id)
+		r.RemoveTunnel(tunnel.id)
+	}()
 
 	for {
 		select {
@@ -415,7 +452,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 			case p2p.TypeTunnelRelay:
 				relayHdr, decryptedRelayMsg, ok, err := tunnel.DecryptRelayMessage(msg.body)
 				if err != nil {
-					errOut <- err
+					log.Printf("error decrypting relay message on outgoing tunnel %v\n", tunnel.ID())
 					return
 				}
 
@@ -425,29 +462,27 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 						dataMsg := p2p.RelayTunnelData{}
 						err = dataMsg.Parse(decryptedRelayMsg)
 						if err != nil {
-							errOut <- err
+							log.Printf("error parsing relay data message on outgoing tunnel %v\n", tunnel.ID())
 							return
 						}
 
-						apiMessage := api.OnionTunnelData{
-							TunnelID: tunnel.id,
-							Data:     dataMsg.Data,
-						}
-
-						// currently, we only only get an error if the tunnel ID is invalid
-						err = r.sendMsgToAPI(tunnel.id, &apiMessage)
+						err = r.sendDataToAPI(hdr.TunnelID, dataMsg.Data)
 						if err != nil {
-							errOut <- err
+							log.Printf("error sending incoming data to API for outgoing tunnel %v\n", tunnel.ID())
 							return
 						}
 
 					default:
-						errOut <- p2p.ErrInvalidMessage
+						log.Printf("received invalid subtype of relay message on outgoing tunnel %v\n", tunnel.ID())
 						return
 					}
+				} else {
+					// we received a non-decryptable relay message, tear down the tunnel
+					log.Printf("received un-decryptable relay message on outgoing tunnel %v\n", tunnel.ID())
+					_ = tunnel.link.sendDestroyTunnel(tunnel.ID())
+					// in case of an error here we cannot really do much apart from tearing down the tunnel anyway
+					return
 				}
-
-				// TODO: decide what to do on an non-encryptable relay message
 
 			case p2p.TypeTunnelDestroy:
 				// since we are the end of the tunnel we don't need to pass the destroy message along we just need
@@ -455,7 +490,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message, errO
 				return
 
 			default: // since we assume the circuit to be fully built we cannot accept any other message
-				errOut <- p2p.ErrInvalidMessage
+				log.Printf("received invalid message on outgoing tunnel %v\n", tunnel.ID())
 				return
 			}
 
@@ -476,9 +511,14 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 		errOut <- err
 		return
 	}
-	defer tunnel.prevHopLink.removeTunnel(tunnel.prevHopTunnelID)
-	defer r.RemoveTunnel(tunnel.prevHopTunnelID)
-	defer r.RemoveTunnel(tunnel.nextHopTunnelID)
+	defer func() {
+		tunnel.prevHopLink.removeTunnel(tunnel.prevHopTunnelID)
+		r.RemoveTunnel(tunnel.prevHopTunnelID)
+		if tunnel.nextHopLink != nil {
+			r.RemoveTunnel(tunnel.nextHopTunnelID)
+			tunnel.nextHopLink.removeTunnel(tunnel.nextHopTunnelID)
+		}
+	}()
 
 	buf := make([]byte, p2p.MaxSize)
 
@@ -526,20 +566,15 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 						}
 
 						if len(r.tunnels[hdr.TunnelID]) == 0 {
-							err = r.RegisterIncomingConnection(hdr.TunnelID)
+							err = r.RegisterIncomingConnection(tunnel)
 							if err != nil {
 								errOut <- err
 								return
 							}
 						}
 
-						apiMessage := api.OnionTunnelData{
-							TunnelID: tunnel.prevHopTunnelID,
-							Data:     dataMsg.Data,
-						}
-
 						// currently, we only only get an error if the tunnel ID is invalid
-						err = r.sendMsgToAPI(tunnel.prevHopTunnelID, &apiMessage)
+						err = r.sendDataToAPI(tunnel.prevHopTunnelID, dataMsg.Data)
 						if err != nil {
 							errOut <- err
 							return
@@ -614,8 +649,6 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 							errOut <- ErrTimedOut
 							return
 						}
-
-						// TODO: finish implementing
 					default:
 						errOut <- p2p.ErrInvalidMessage
 						return
@@ -689,6 +722,8 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 				}
 			}
 			return
+		case <-tunnel.quit:
+			return
 		}
 	}
 }
@@ -756,6 +791,7 @@ func (r *Router) handleLink(link *Link, errOut chan error) {
 				prevHopTunnelID: hdr.TunnelID,
 				prevHopLink:     link,
 				dhShared:        dhShared,
+				quit:            make(chan struct{}),
 			}
 			err = link.sendMsg(hdr.TunnelID, tunnelCreated)
 			if err != nil {

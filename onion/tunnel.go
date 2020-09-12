@@ -26,10 +26,17 @@ type Tunnel struct {
 	counter uint32
 	hops    []*rps.Peer
 	link    *Link
+	quit    chan struct{}
 }
 
 func (tunnel *Tunnel) ID() uint32 {
 	return tunnel.id
+}
+
+func (tunnel *Tunnel) Close() (err error) {
+	close(tunnel.quit)
+	err = tunnel.link.sendDestroyTunnel(tunnel.ID())
+	return err
 }
 
 func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err error) {
@@ -74,6 +81,20 @@ type tunnelSegment struct {
 	nextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
 	dhShared        *[32]byte // Diffie-Hellman key shared with the previous hop
 	counter         uint32
+
+	quit chan struct{}
+}
+
+func (tunnel *tunnelSegment) Close() (err error) {
+	close(tunnel.quit)
+	err = tunnel.prevHopLink.sendDestroyTunnel(tunnel.prevHopTunnelID)
+	if err != nil && tunnel.nextHopLink != nil {
+		_ = tunnel.prevHopLink.sendDestroyTunnel(tunnel.prevHopTunnelID)
+	} else if tunnel.nextHopLink != nil {
+		err = tunnel.prevHopLink.sendDestroyTunnel(tunnel.prevHopTunnelID)
+	}
+
+	return err
 }
 
 func handleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
