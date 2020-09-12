@@ -14,9 +14,11 @@ import (
 
 const (
 	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8
-	MaxRelayDataSize = MaxSize - HeaderSize - RelayHeaderSize
 	MaxRelaySize     = MaxSize - HeaderSize
+	MaxRelayDataSize = MaxRelaySize - RelayHeaderSize
 )
+
+// var randSrc = mathRand.NewSource(time.Now().Unix())
 
 type RelayMessage interface {
 	Type() RelayType
@@ -80,7 +82,7 @@ func (hdr *RelayHeader) ComputeDigest(msg []byte) (err error) {
 	packedHdr := make([]byte, RelayHeaderSize)
 	err = hdr.Pack(packedHdr)
 	if err != nil {
-		return
+		return err
 	}
 	fullMsg := append(packedHdr, msg...)
 
@@ -122,27 +124,33 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 }
 
 func PackRelayMessage(buf []byte, oldCounter uint32, msg RelayMessage) (newCounter uint32, n int, err error) {
+	// sanity checks
 	n = MaxRelayDataSize + RelayHeaderSize
 	if len(buf) < n {
 		return oldCounter, -1, ErrBufferTooSmall
 	}
+	if msg == nil {
+		return oldCounter, -1, ErrInvalidMessage
+	}
 
-	// generate random oldCounter, greater than the previous one
-	oldCounter += uint32(mathRand.Int31n(64)) //nolint:gosec // pseudo-rand is good enough here
-	byteCounter := make([]byte, 4)
-	binary.BigEndian.PutUint32(byteCounter, oldCounter)
-	ctr := [3]byte{}
-	copy(ctr[:], byteCounter[1:4]) // TODO: is this correct?
+	// generate random  counter, greater than the previous one
+	newCounter = oldCounter + uint32(mathRand.Int31n(64)) //nolint:gosec // pseudo-rand is good enough here
+	counterBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(counterBytes, newCounter)
 	hdr := RelayHeader{
-		Counter:   ctr,
+		Counter:   [3]byte{counterBytes[1], counterBytes[2], counterBytes[3]}, // TODO: is this correct?
 		RelayType: msg.Type(),
 		Size:      uint16(msg.PackedSize() + RelayHeaderSize),
 	}
 
 	n2, err := msg.Pack(buf[RelayHeaderSize:])
-	if n2 != msg.PackedSize() && err == nil {
-		return oldCounter, -1, ErrInvalidMessage
+	if err != nil {
+		return newCounter, -1, err
 	}
+	if n2 != msg.PackedSize() {
+		return newCounter, -1, ErrInvalidMessage
+	}
+
 	// initialize remaining bytes of the packet with pseudo randomness
 	_, err = rand.Read(buf[RelayHeaderSize+n2 : n])
 	if err != nil {
@@ -151,15 +159,12 @@ func PackRelayMessage(buf []byte, oldCounter uint32, msg RelayMessage) (newCount
 
 	err = hdr.ComputeDigest(buf[RelayHeaderSize:n])
 	if err != nil {
-		return oldCounter, -1, err
+		return newCounter, -1, err
 	}
 
-	err = hdr.Pack(buf[:RelayHeaderSize])
-	if err != nil {
-		return oldCounter, -1, err
-	}
+	_ = hdr.Pack(buf[:RelayHeaderSize])
 
-	return oldCounter, n, nil
+	return newCounter, n, nil
 }
 
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
@@ -277,7 +282,7 @@ func (msg *RelayTunnelExtend) Pack(buf []byte) (n int, err error) {
 	keyOffset := 8
 	if msg.IPv6 {
 		keyOffset = 20
-		flags |= 1
+		flags |= flagIPv6
 		for i := 0; i < 16; i++ {
 			buf[4+i] = addr[15-i]
 		}
