@@ -53,7 +53,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 		return nil, ErrNotEnoughHops
 	}
 
-	msgBuf := make([]byte, p2p.MaxSize)
+	msgBuf := make([]byte, p2p.MessageSize)
 
 	// generate a new, unique tunnel ID
 	tunnelID := r.newTunnelID()
@@ -206,7 +206,7 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 		Data: payload,
 	}
 
-	buf := make([]byte, p2p.MaxRelaySize)
+	buf := make([]byte, p2p.RelayMessageSize)
 	if tunnel, ok := r.outgoingTunnels[tunnelID]; ok {
 		var n int
 		tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &relayData)
@@ -671,7 +671,7 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 		}
 	}()
 
-	buf := make([]byte, p2p.MaxSize)
+	buf := make([]byte, p2p.MessageSize)
 
 	for {
 		select {

@@ -29,7 +29,7 @@ type Link struct {
 	port    uint16
 
 	l      sync.Mutex // guards fields below
-	msgBuf [p2p.MaxSize]byte
+	msgBuf [p2p.MessageSize]byte
 	nc     net.Conn
 	rd     *bufio.Reader
 
@@ -126,7 +126,7 @@ func (link *Link) readMsg() (msg message, err error) {
 	}
 
 	// ready message body
-	body := link.msgBuf[:p2p.MaxMessageSize]
+	body := link.msgBuf[:p2p.MaxBodySize]
 	_, err = io.ReadFull(link.rd, body)
 	if err != nil {
 		if err == io.EOF {
@@ -139,7 +139,7 @@ func (link *Link) readMsg() (msg message, err error) {
 }
 
 func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
-	if len(msg) > p2p.MaxSize-p2p.HeaderSize {
+	if len(msg) > p2p.MessageSize-p2p.HeaderSize {
 		return p2p.ErrInvalidMessage
 	}
 

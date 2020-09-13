@@ -39,7 +39,7 @@ func TestEncryptDecryptRelayMsg(t *testing.T) {
 		Data: payload,
 	}
 	prevCounter := uint32(123)
-	buf := make([]byte, p2p.MaxSize)
+	buf := make([]byte, p2p.MessageSize)
 	_, n, err := p2p.PackRelayMessage(buf, prevCounter, &relayData)
 	require.Nil(t, err)
 

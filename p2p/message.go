@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	HeaderSize     = 4 + 1
-	MaxSize        = 1024
-	MaxMessageSize = MaxSize - HeaderSize
+	HeaderSize  = 4 + 1                    // size of a P2P header
+	MessageSize = 1024                     // size of a P2P packet (static and padded if content is smaller)
+	MaxBodySize = MessageSize - HeaderSize // max size of payload
 )
 
 var (
@@ -63,7 +63,7 @@ func PackMessage(buf []byte, tunnelID uint32, msg Message) (n int, err error) {
 		return -1, ErrInvalidMessage
 	}
 
-	n = MaxSize // we always pack the full packet such that we pad accordingly
+	n = MessageSize // we always pack the full packet such that we pad accordingly
 	header := Header{tunnelID, msg.Type()}
 	header.Pack(buf[:HeaderSize])
 	n2, err := msg.Pack(buf[HeaderSize:n])

@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8
-	MaxRelaySize     = MaxSize - HeaderSize
-	MaxRelayDataSize = MaxRelaySize - RelayHeaderSize
+	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8                  // relay sub-header size
+	RelayMessageSize = MaxBodySize                        // size of a relay (sub-)message
+	MaxRelayDataSize = RelayMessageSize - RelayHeaderSize // max size of relay payload
 )
 
 // var randSrc = mathRand.NewSource(time.Now().Unix())

@@ -96,12 +96,12 @@ func TestPackMessage(t *testing.T) {
 	const tunnelID = 42
 
 	t.Run("valid", func(t *testing.T) {
-		var buf [MaxSize]byte
+		var buf [MessageSize]byte
 		msg := new(TunnelDestroy)
 
 		n, err := PackMessage(buf[:], tunnelID, msg)
 		require.Nil(t, err)
-		require.Equal(t, MaxSize, n)
+		require.Equal(t, MessageSize, n)
 
 		var hdr Header
 		err = hdr.Parse(buf[:])
@@ -112,7 +112,7 @@ func TestPackMessage(t *testing.T) {
 	t.Run("invalid msg", func(t *testing.T) {
 		packErr := errors.New("pack err")
 
-		var buf [MaxSize]byte
+		var buf [MessageSize]byte
 		msg := &MockMsg{
 			ReportedType:       TypeTunnelDestroy,
 			ReportedPackedSize: 42,

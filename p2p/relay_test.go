@@ -116,12 +116,12 @@ func TestPackRelayMessage(t *testing.T) {
 	const oldCounter = 42
 
 	t.Run("valid", func(t *testing.T) {
-		var buf [MaxRelaySize]byte
+		var buf [RelayMessageSize]byte
 		msg := new(RelayTunnelData)
 
 		ctr, n, err := PackRelayMessage(buf[:], oldCounter, msg)
 		require.Nil(t, err)
-		require.Equal(t, MaxRelaySize, n)
+		require.Equal(t, RelayMessageSize, n)
 		require.Greater(t, ctr, uint32(oldCounter))
 
 		var hdr RelayHeader
@@ -131,7 +131,7 @@ func TestPackRelayMessage(t *testing.T) {
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		var buf [MaxSize]byte
+		var buf [MessageSize]byte
 
 		packErr := errors.New("pack err")
 		msg := &MockRelayMsg{

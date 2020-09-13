@@ -135,7 +135,7 @@ func TestTunnelRelay(t *testing.T) {
 		EncData: relayData,
 	}, *msg)
 
-	require.Equal(t, MaxRelaySize, msg.PackedSize())
+	require.Equal(t, RelayMessageSize, msg.PackedSize())
 
 	var panicMsg string
 	func() {
