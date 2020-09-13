@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -89,12 +90,13 @@ func TestConnectionSend(t *testing.T) {
 
 		var n int
 		var sendErr, recvErr error
-		var sent bool
 		var buf [64]byte
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
 			sendErr = conn.Send(msg)
 			connSend.Close()
-			sent = true
+			wg.Done()
 		}()
 
 		var hdr Header
@@ -112,7 +114,7 @@ func TestConnectionSend(t *testing.T) {
 		extraData, _ := ioutil.ReadAll(connRecv)
 		require.Equal(t, []byte{}, extraData)
 
-		require.True(t, sent)
+		wg.Wait()
 		require.Nil(t, sendErr)
 	})
 }
@@ -123,12 +125,13 @@ func TestConnectionSendError(t *testing.T) {
 
 	var n int
 	var sendErr, recvErr error
-	var sent bool
 	var buf [64]byte
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		sendErr = conn.SendError(42, TypeOnionCover)
 		connSend.Close()
-		sent = true
+		wg.Done()
 	}()
 
 	var hdr Header
@@ -150,7 +153,7 @@ func TestConnectionSendError(t *testing.T) {
 	extraData, _ := ioutil.ReadAll(connRecv)
 	require.Equal(t, []byte{}, extraData)
 
-	require.True(t, sent)
+	wg.Wait()
 	require.Nil(t, sendErr)
 }
 
