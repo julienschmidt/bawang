@@ -519,6 +519,134 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 	}
 }
 
+func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan message, tunnel *tunnelSegment, msgHdr *p2p.Header, msgData []byte) (err error) {
+	var ok bool
+	var decryptedRelayMsg []byte
+	ok, decryptedRelayMsg, err = p2p.DecryptRelay(msgData, tunnel.dhShared)
+	if err != nil { // error when decrypting
+		return
+	}
+
+	if ok { // relay message is meant for us
+		relayHdr := p2p.RelayHeader{}
+		err = relayHdr.Parse(decryptedRelayMsg[:p2p.RelayHeaderSize])
+		if err != nil {
+			return
+		}
+
+		if relayHdr.GetCounter() <= tunnel.counter {
+			log.Printf("received message with invalid counter terminating tunnel")
+			return
+		}
+
+		// update message counter
+		tunnel.counter = relayHdr.GetCounter()
+
+		switch relayHdr.RelayType {
+		case p2p.RelayTypeTunnelData:
+			dataMsg := p2p.RelayTunnelData{}
+			err = dataMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
+			if err != nil {
+				return err
+			}
+
+			// we received a valid data packed check if this was the first data message on this tunnel,
+			// if so announce it to the API as tunnel incoming
+
+			if _, ok := r.tunnels[msgHdr.TunnelID]; !ok {
+				return ErrInvalidTunnel
+			}
+
+			if len(r.tunnels[msgHdr.TunnelID]) == 0 {
+				err = r.RegisterIncomingConnection(tunnel)
+				if err != nil {
+					return err
+				}
+			}
+
+			// currently, we only only get an error if the tunnel ID is invalid
+			err = r.sendDataToAPI(tunnel.prevHopTunnelID, dataMsg.Data)
+			if err != nil {
+				return err
+			}
+
+		case p2p.RelayTypeTunnelExtend: // this be quite interesting
+			extendMsg := p2p.RelayTunnelExtend{}
+			err = extendMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
+			if err != nil {
+				return err
+			}
+
+			var nextLink *Link
+			nextLink, err = r.GetOrCreateLink(extendMsg.Address, extendMsg.Port)
+			if err != nil {
+				return err
+			}
+
+			tunnel.nextHopLink = nextLink
+			tunnel.nextHopTunnelID = r.newTunnelID()
+			err = nextLink.register(tunnel.nextHopTunnelID, dataChanNextHop)
+			if err != nil {
+				return err
+			}
+
+			createMsg := tunnelCreateMsgFromRelayTunnelExtendMsg(&extendMsg)
+			err = tunnel.nextHopLink.sendMsg(tunnel.nextHopTunnelID, &createMsg)
+			if err != nil {
+				return err
+			}
+
+			select {
+			case created := <-dataChanNextHop:
+				if created.hdr.Type != p2p.TypeTunnelCreated {
+					return p2p.ErrInvalidMessage
+				}
+
+				createdMsg := p2p.TunnelCreated{}
+				err = createdMsg.Parse(created.body)
+				if err != nil {
+					return err
+				}
+
+				extendedMsg := relayTunnelExtendedMsgFromTunnelCreatedMsg(&createdMsg)
+				var n int
+				tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &extendedMsg)
+				if err != nil {
+					return err
+				}
+
+				var encryptedExtended []byte
+				encryptedExtended, err = p2p.EncryptRelay(buf[:n], tunnel.dhShared)
+				if err != nil {
+					return err
+				}
+
+				err = tunnel.prevHopLink.sendRelay(tunnel.prevHopTunnelID, encryptedExtended)
+				if err != nil {
+					return err
+				}
+
+			case <-time.After(time.Duration(r.cfg.BuildTimeout) * time.Second): // timeout
+				return ErrTimedOut
+			}
+		default:
+			return p2p.ErrInvalidMessage
+		}
+	} else {
+		// relay message is not meant for us
+		if tunnel.nextHopLink != nil { // simply pass it along with one layer of encryption removed
+			err = tunnel.nextHopLink.sendRelay(tunnel.nextHopTunnelID, decryptedRelayMsg)
+			if err != nil {
+				return err
+			}
+		} else { // we received an invalid relay message
+			return p2p.ErrInvalidMessage
+		}
+	}
+
+	return err
+}
+
 func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	// This is the handler go routine for incoming tunnels that either are terminated by us or where we are just
 	// an in-between hop. The handshake of the previous hop to us is assumed to be done we can, however, receive
@@ -556,148 +684,11 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 			data := msg.body
 			switch hdr.Type {
 			case p2p.TypeTunnelRelay:
-				var ok bool
-				var decryptedRelayMsg []byte
-				ok, decryptedRelayMsg, err = p2p.DecryptRelay(data, tunnel.dhShared)
-				if err != nil { // error when decrypting
-					errOut <- err
+				err = r.handleIncomingTunnelRelayMsg(buf, dataChanNextHop, tunnel, &hdr, data)
+				if err != nil {
+					log.Printf("Error handling incoming relay message: %v\n", err)
 					return
 				}
-
-				if ok { // relay message is meant for us
-					relayHdr := p2p.RelayHeader{}
-					err = relayHdr.Parse(decryptedRelayMsg[:p2p.RelayHeaderSize])
-					if err != nil {
-						return
-					}
-
-					if relayHdr.GetCounter() <= tunnel.counter {
-						log.Printf("received message with invalid counter terminating tunnel")
-						return
-					}
-
-					// update message counter
-					tunnel.counter = relayHdr.GetCounter()
-
-					switch relayHdr.RelayType {
-					case p2p.RelayTypeTunnelData:
-						dataMsg := p2p.RelayTunnelData{}
-						err = dataMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
-						if err != nil {
-							errOut <- err
-							return
-						}
-
-						// we received a valid data packed check if this was the first data message on this tunnel,
-						// if so announce it to the API as tunnel incoming
-
-						if _, ok := r.tunnels[hdr.TunnelID]; !ok {
-							errOut <- ErrInvalidTunnel
-							return
-						}
-
-						if len(r.tunnels[hdr.TunnelID]) == 0 {
-							err = r.RegisterIncomingConnection(tunnel)
-							if err != nil {
-								errOut <- err
-								return
-							}
-						}
-
-						// currently, we only only get an error if the tunnel ID is invalid
-						err = r.sendDataToAPI(tunnel.prevHopTunnelID, dataMsg.Data)
-						if err != nil {
-							errOut <- err
-							return
-						}
-
-					case p2p.RelayTypeTunnelExtend: // this be quite interesting
-						extendMsg := p2p.RelayTunnelExtend{}
-						err = extendMsg.Parse(decryptedRelayMsg[p2p.RelayHeaderSize:relayHdr.Size])
-						if err != nil {
-							errOut <- err
-							return
-						}
-
-						var nextLink *Link
-						nextLink, err = r.GetOrCreateLink(extendMsg.Address, extendMsg.Port)
-						if err != nil {
-							errOut <- err
-							return
-						}
-
-						tunnel.nextHopLink = nextLink
-						tunnel.nextHopTunnelID = r.newTunnelID()
-						err = nextLink.register(tunnel.nextHopTunnelID, dataChanNextHop)
-						if err != nil {
-							errOut <- err
-							return
-						}
-
-						createMsg := tunnelCreateMsgFromRelayTunnelExtendMsg(&extendMsg)
-						err = tunnel.nextHopLink.sendMsg(tunnel.nextHopTunnelID, &createMsg)
-						if err != nil {
-							errOut <- err
-							return
-						}
-
-						select {
-						case created := <-dataChanNextHop:
-							if created.hdr.Type != p2p.TypeTunnelCreated {
-								errOut <- p2p.ErrInvalidMessage
-								return
-							}
-
-							createdMsg := p2p.TunnelCreated{}
-							err = createdMsg.Parse(created.body)
-							if err != nil {
-								errOut <- err
-								return
-							}
-
-							extendedMsg := relayTunnelExtendedMsgFromTunnelCreatedMsg(&createdMsg)
-							var n int
-							tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &extendedMsg)
-							if err != nil {
-								errOut <- err
-								return
-							}
-
-							var encryptedExtended []byte
-							encryptedExtended, err = p2p.EncryptRelay(buf[:n], tunnel.dhShared)
-							if err != nil {
-								errOut <- err
-								return
-							}
-
-							err = tunnel.prevHopLink.sendRelay(tunnel.prevHopTunnelID, encryptedExtended)
-							if err != nil {
-								errOut <- err
-								return
-							}
-
-						case <-time.After(time.Duration(r.cfg.BuildTimeout) * time.Second): // timeout
-							errOut <- ErrTimedOut
-							return
-						}
-					default:
-						errOut <- p2p.ErrInvalidMessage
-						return
-					}
-				} else {
-					// relay message is not meant for us
-					if tunnel.nextHopLink != nil { // simply pass it along with one layer of encryption removed
-						err = tunnel.nextHopLink.sendRelay(tunnel.nextHopTunnelID, decryptedRelayMsg)
-						if err != nil {
-							errOut <- err
-							return
-						}
-					} else { // we received an invalid relay message
-						errOut <- p2p.ErrInvalidMessage
-						return
-					}
-				}
-
 			case p2p.TypeTunnelDestroy:
 				// we pass the destroy message along and tear down
 				// TODO: send onion error message to API here
