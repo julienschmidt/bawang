@@ -444,12 +444,9 @@ func (r *Router) SendCover(coverSize uint16) (err error) {
 			return ErrSendCoverNotAllowed
 		}
 	}
+	r.tunnelsLock.Unlock()
 
-	var tunnel *Tunnel
-	for _, tunnel = range r.outgoingTunnels {
-		break
-	}
-	if tunnel == nil {
+	if r.coverTunnel == nil {
 		return ErrInvalidTunnel
 	}
 
@@ -458,18 +455,18 @@ func (r *Router) SendCover(coverSize uint16) (err error) {
 
 		var n int
 		buf := make([]byte, p2p.RelayMessageSize)
-		tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, relayCover)
+		r.coverTunnel.counter, n, err = p2p.PackRelayMessage(buf, r.coverTunnel.counter, relayCover)
 		if err != nil {
 			return err
 		}
 
 		var encryptedMsg []byte
-		encryptedMsg, err = tunnel.EncryptRelayMsg(buf[:n])
+		encryptedMsg, err = r.coverTunnel.EncryptRelayMsg(buf[:n])
 		if err != nil {
 			return err
 		}
 
-		err = tunnel.link.sendRelay(tunnel.ID(), encryptedMsg)
+		err = r.coverTunnel.link.sendRelay(r.coverTunnel.ID(), encryptedMsg)
 		if err != nil {
 			return err
 		}

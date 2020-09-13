@@ -105,11 +105,12 @@ ML: Michael Loipführer, JS: Julien Schmidt
 - Message Parsing and Packing: mostly JS
 - P2P Handshake Implementation: ML
 - API Protocol Logic: mostly ML
+- P2P Round logic: JS
 - CI: JS
 - Documentation: ML, JS
 
 
 ## Effort Spent
 
-We mainly worked together intensively on the project on three weekends (23./24. May, 06./07. June, 10./11. July) and independently on some additional days. So far, we believe that we both spent enough effort on the project and that the workload was fairly distributed, as the git history confirms.
-
+We mainly worked together intensively on the project on three weekends (23./24. May, 06./07. June, 10./11. July) and independently on some additional days before the midterm report.
+As a final implementation sprint we both worked more intensively on the project during the last week before the submission due date, i.e. from the 7. Sep to 13. Sep.
