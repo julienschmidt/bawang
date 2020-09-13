@@ -13,7 +13,6 @@ import (
 
 	"bawang/api"
 	"bawang/config"
-	"bawang/p2p"
 	"bawang/rps"
 )
 
@@ -219,6 +218,8 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	assert.Equal(t, 0, len(router4.tunnels))
 
 	close(quitChan)
+
+	// time.Sleep(60 * time.Second)
 }
 
 func TestRouterHandleRounds(t *testing.T) {
@@ -260,8 +261,9 @@ func TestRouterHandleRounds(t *testing.T) {
 
 	router4 := newRouterWithRPS(&cfgPeer4, nil)
 	require.NotNil(t, router4)
-	errChanRounds := make(chan error)
+
 	quitChan := make(chan struct{})
+	errChanRounds := make(chan error)
 	errChanOnion1 := make(chan error)
 	errChanOnion2 := make(chan error)
 	errChanOnion3 := make(chan error)
@@ -273,6 +275,7 @@ func TestRouterHandleRounds(t *testing.T) {
 	go ListenOnionSocket(&cfgPeer4, router4, errChanOnion4, quitChan)
 
 	time.Sleep(1 * time.Second)
+
 	go router1.HandleRounds(errChanRounds, quitChan)
 	time.Sleep(1 * time.Second)
 
@@ -280,6 +283,6 @@ func TestRouterHandleRounds(t *testing.T) {
 	assert.Equal(t, 1, len(router1.outgoingTunnels))
 	assert.Equal(t, 1, len(router1.tunnels))
 
-	err = router1.SendCover(2*p2p.MessageSize + 1)
-	assert.Nil(t, err)
+	close(quitChan)
+	time.Sleep(1 * time.Second)
 }
