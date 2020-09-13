@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -114,6 +115,27 @@ func (link *Link) destroy() (err error) {
 	close(link.Quit)
 	err = link.nc.Close()
 	return
+}
+
+// readMsg reads a message from the underlying network connection and returns its type and message body.
+func (link *Link) readMsg() (msg message, err error) {
+	// read the message header
+	var hdr p2p.Header
+	if err = hdr.Read(link.rd); err != nil {
+		return msg, err
+	}
+
+	// ready message body
+	body := link.msgBuf[:p2p.MaxMessageSize]
+	_, err = io.ReadFull(link.rd, body)
+	if err != nil {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		return msg, err
+	}
+
+	return message{hdr, body}, nil
 }
 
 func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {

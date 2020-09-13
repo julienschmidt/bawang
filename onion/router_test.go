@@ -15,7 +15,7 @@ import (
 	"bawang/rps"
 )
 
-func TestRouter_BuildTunnel(t *testing.T) {
+func TestRouterBuildTunnel(t *testing.T) {
 	cfgPeer1 := config.Config{}
 	err := cfgPeer1.FromFile("../.testing/bootstrap.conf")
 	require.Nil(t, err)

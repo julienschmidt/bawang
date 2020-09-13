@@ -2,10 +2,8 @@
 package onion
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
-	"io"
 	"log"
 	mathRand "math/rand"
 	"net"
@@ -72,7 +70,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 		quit: make(chan struct{}),
 	}
 
-	// now we register a output channel for this link
+	// now we register an output channel for this link
 	dataOut := make(chan message, 5)
 	err = link.register(tunnelID, dataOut)
 	if err != nil {
@@ -761,8 +759,6 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 }
 
 func (r *Router) handleLink(link *Link) {
-	var msgBuf [p2p.MaxSize]byte
-	rd := bufio.NewReader(link.nc)
 	goRoutineErr := make(chan error, 10)
 
 	for {
@@ -775,35 +771,26 @@ func (r *Router) handleLink(link *Link) {
 		default:
 		}
 
-		// read the message header
-		var hdr p2p.Header
-		err := hdr.Read(rd)
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			log.Printf("Error reading message header: %v", err)
-			return
-		}
-
-		// ready message body
-		data := msgBuf[:p2p.MaxMessageSize]
-		_, err = io.ReadFull(rd, data)
+		msg, err := link.readMsg()
 		if err != nil {
 			log.Printf("Error reading message body: %v, ignoring message", err)
-			err = r.RemoveTunnel(hdr.TunnelID)
+			err = r.RemoveTunnel(msg.hdr.TunnelID)
 			if err != nil {
-				log.Printf("Error removing tunnel with ID: %v, %v\n", hdr.TunnelID, err)
+				log.Printf("Error removing tunnel with ID: %v, %v\n", msg.hdr.TunnelID, err)
 			}
 			continue
 		}
 
-		_, ok := link.dataOut[hdr.TunnelID]
+		dataOut, ok := link.dataOut[msg.hdr.TunnelID]
 		if ok {
-			link.dataOut[hdr.TunnelID] <- message{hdr, data}
+			dataOut <- msg
 		} else {
-			// we receive the first message on this link for a tunnel we do not know yet
-			if hdr.Type != p2p.TypeTunnelCreate { // the first message for a new tunnel MUST be Tunnel Create
+			// we receive the first message on this link for a yet unknown tunnel
+
+			hdr, data := msg.hdr, msg.body
+
+			// the first message for a new tunnel MUST be TUNNEL_CREATE
+			if hdr.Type != p2p.TypeTunnelCreate {
 				log.Printf("Error: received first message for new tunnel that is not tunnel create")
 				continue
 			}
