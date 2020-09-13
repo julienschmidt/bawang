@@ -13,34 +13,22 @@ import (
 )
 
 const (
-	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8                  // relay sub-header size
-	RelayMessageSize = MaxBodySize                        // size of a relay (sub-)message
-	MaxRelayDataSize = RelayMessageSize - RelayHeaderSize // max size of relay payload
+	RelayHeaderSize  = 3 + 1 + 2 + 1 + 8                  // Relay sub-header size
+	RelayMessageSize = MaxBodySize                        // Size of a relay (sub-)message
+	MaxRelayDataSize = RelayMessageSize - RelayHeaderSize // Max size of relay payload
 )
 
-// var randSrc = mathRand.NewSource(time.Now().Unix())
-
+// RelayMessage abstracts a relay sub protocol protocol message (not containing the outer header).
 type RelayMessage interface {
-	Type() RelayType
-	Parse(data []byte) error
-	Pack(buf []byte) (n int, err error)
-	PackedSize() (n int)
+	Type() RelayType                    // Type returns the relay type of the message.
+	Parse(data []byte) error            // Parse fills the struct with values parsed from the given bytes slice.
+	Pack(buf []byte) (n int, err error) // Pack serializes the values into a bytes slice.
+	PackedSize() (n int)                // PackedSize returns the number of bytes required if serialized to bytes.
 }
 
 const flagIPv6 = 1
 
-// RelayHeader is the header of a relay sub protocol protocol cell
-//  0                   1                   2                   3
-//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |                           Tunnel ID                           |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |  TUNNEL RELAY |                   Counter                     |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |   Relay Type  |             Size              |    Reserved   |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |                       Digest (8 byte)                         |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// RelayHeader is the header of a relay sub protocol protocol cell.
 type RelayHeader struct {
 	Counter   [3]byte
 	RelayType RelayType
@@ -48,6 +36,7 @@ type RelayHeader struct {
 	Digest    [8]byte
 }
 
+// GetCounter returns the counter value as uint32
 func (hdr *RelayHeader) GetCounter() (ctr uint32) {
 	counterBytes := make([]byte, 4)
 	copy(counterBytes[1:], hdr.Counter[:])
@@ -56,6 +45,7 @@ func (hdr *RelayHeader) GetCounter() (ctr uint32) {
 	return ctr
 }
 
+// Parse parses a message (sub-)header from the given data.
 func (hdr *RelayHeader) Parse(data []byte) (err error) {
 	if len(data) < RelayHeaderSize {
 		return ErrInvalidMessage
@@ -71,6 +61,7 @@ func (hdr *RelayHeader) Parse(data []byte) (err error) {
 	return nil
 }
 
+// Pack serializes the header into bytes.
 func (hdr *RelayHeader) Pack(buf []byte) (err error) {
 	if cap(buf) < RelayHeaderSize {
 		return ErrBufferTooSmall
@@ -85,14 +76,15 @@ func (hdr *RelayHeader) Pack(buf []byte) (err error) {
 	return nil
 }
 
-func (hdr *RelayHeader) ComputeDigest(msg []byte) (err error) {
+// ComputeDigest computes the digest for a given message body and saves it into the header.
+func (hdr *RelayHeader) ComputeDigest(body []byte) (err error) {
 	copy(hdr.Digest[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) // initialize digest to zero
 	packedHdr := make([]byte, RelayHeaderSize)
 	err = hdr.Pack(packedHdr)
 	if err != nil {
 		return err
 	}
-	fullMsg := append(packedHdr, msg...)
+	fullMsg := append(packedHdr, body...)
 
 	digest := sha256.Sum256(fullMsg)
 	// TODO: figure out how we can reintroduce this quick check
@@ -105,7 +97,8 @@ func (hdr *RelayHeader) ComputeDigest(msg []byte) (err error) {
 	return err
 }
 
-func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
+// CheckDigest verifies that the digest within the header is valid for a given message body.
+func (hdr *RelayHeader) CheckDigest(body []byte) (ok bool) {
 	// TODO: figure out how we can reintroduce this quick check
 	// if hdr.Digest[0] != 0x00 || hdr.Digest[1] != 0x00 {
 	// 	return false
@@ -113,7 +106,7 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 
 	digest := make([]byte, 8)
 	copy(digest, hdr.Digest[:])
-	err := hdr.ComputeDigest(msg)
+	err := hdr.ComputeDigest(body)
 	if err != nil {
 		copy(hdr.Digest[:], digest)
 		return false
@@ -131,6 +124,7 @@ func (hdr *RelayHeader) CheckDigest(msg []byte) (ok bool) {
 	return ok
 }
 
+// PackRelayMessage serializes a given relay message into the given bytes buffer (without outer P2P message header).
 func PackRelayMessage(buf []byte, oldCounter uint32, msg RelayMessage) (newCounter uint32, n int, err error) {
 	// sanity checks
 	n = MaxRelayDataSize + RelayHeaderSize
@@ -175,10 +169,12 @@ func PackRelayMessage(buf []byte, oldCounter uint32, msg RelayMessage) (newCount
 	return newCounter, n, nil
 }
 
+// DecryptRelay attempts to decrypt an encrypted message given as a bytes slice with a given key.
 func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err error) {
 	if len(encRelayMsg) > MaxRelayDataSize+RelayHeaderSize {
 		return false, nil, ErrInvalidMessage
 	}
+
 	// message starts with the relay message header, we get the counter from the first 3 bytes
 	counter := encRelayMsg[:3]
 	iv := make([]byte, aes.BlockSize)
@@ -206,6 +202,7 @@ func DecryptRelay(encRelayMsg []byte, key *[32]byte) (ok bool, msg []byte, err e
 	return ok, msg, nil
 }
 
+// DecryptRelay encrypts a message given as a bytes slice with the given key.
 func EncryptRelay(packedMsg []byte, key *[32]byte) (encMsg []byte, err error) {
 	counter := packedMsg[:3]
 	iv := make([]byte, aes.BlockSize)
@@ -235,10 +232,12 @@ type RelayTunnelExtend struct {
 	EncDHPubKey [512]byte // encrypted with peer pub key
 }
 
+// Type returns the relay type of the message.
 func (msg *RelayTunnelExtend) Type() RelayType {
 	return RelayTypeTunnelExtend
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *RelayTunnelExtend) Parse(data []byte) (err error) {
 	const minSize = len(msg.EncDHPubKey) + 2 + 2 + 4
 	if len(data) < minSize {
@@ -266,6 +265,7 @@ func (msg *RelayTunnelExtend) Parse(data []byte) (err error) {
 	return nil
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *RelayTunnelExtend) PackedSize() (n int) {
 	n = 2 + 2 + 4 + len(msg.EncDHPubKey)
 	if msg.IPv6 {
@@ -274,6 +274,7 @@ func (msg *RelayTunnelExtend) PackedSize() (n int) {
 	return n
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *RelayTunnelExtend) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -307,15 +308,18 @@ func (msg *RelayTunnelExtend) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// RelayTunnelExtended is used to relay the created message from the next hop back to the original sender of the TUNNEL EXTEND message.
 type RelayTunnelExtended struct {
 	DHPubKey      [32]byte // encrypted pub key of next peer
 	SharedKeyHash [32]byte
 }
 
+// Type returns the relay type of the message.
 func (msg *RelayTunnelExtended) Type() RelayType {
 	return RelayTypeTunnelExtended
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *RelayTunnelExtended) Parse(data []byte) (err error) {
 	const size = 32 + 32
 	if len(data) < size {
@@ -328,11 +332,13 @@ func (msg *RelayTunnelExtended) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *RelayTunnelExtended) PackedSize() (n int) {
 	n = 32 + 32
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *RelayTunnelExtended) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -346,26 +352,30 @@ func (msg *RelayTunnelExtended) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
-// RelayTunnelData is application payload we receive
+// RelayTunnelData is application payload we receive.
 type RelayTunnelData struct {
 	Data []byte
 }
 
+// Type returns the relay type of the message.
 func (msg *RelayTunnelData) Type() RelayType {
 	return RelayTypeTunnelData
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *RelayTunnelData) Parse(data []byte) (err error) {
 	msg.Data = make([]byte, len(data))
 	copy(msg.Data, data)
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *RelayTunnelData) PackedSize() (n int) {
 	n = len(msg.Data)
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *RelayTunnelData) Pack(buf []byte) (n int, err error) {
 	if len(buf) < len(msg.Data) {
 		err = ErrBufferTooSmall

@@ -10,10 +10,12 @@ type TunnelCreate struct {
 	EncDHPubKey [512]byte
 }
 
+// Type returns the type of the message.
 func (msg *TunnelCreate) Type() Type {
 	return TypeTunnelCreate
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *TunnelCreate) Parse(data []byte) (err error) {
 	const size = 1 + 2 + len(msg.EncDHPubKey)
 	if len(data) < size {
@@ -29,10 +31,12 @@ func (msg *TunnelCreate) Parse(data []byte) (err error) {
 	return nil
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *TunnelCreate) PackedSize() (n int) {
 	return 1 + 2 + len(msg.EncDHPubKey)
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -49,15 +53,20 @@ func (msg *TunnelCreate) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// TunnelCreated is sent as a response to TUNNEL CREATE message.
+// It contains the next hops Diffie-Hellman public key for ephemeral key derivation as well as a hash of the derived key proving ownership of the private identifier key.
+
 type TunnelCreated struct {
 	DHPubKey      [32]byte
 	SharedKeyHash [32]byte
 }
 
+// Type returns the type of the message.
 func (msg *TunnelCreated) Type() Type {
 	return TypeTunnelCreated
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *TunnelCreated) Parse(data []byte) (err error) {
 	const size = 3 + 32 + 32
 	if len(data) < size {
@@ -70,10 +79,12 @@ func (msg *TunnelCreated) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *TunnelCreated) PackedSize() (n int) {
 	return 3 + 32 + 32
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *TunnelCreated) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -87,13 +98,16 @@ func (msg *TunnelCreated) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// TunnelDestroy is sent to neighboring hops to initiate tunnel teardown.
 type TunnelDestroy struct {
 }
 
+// Type returns the type of the message.
 func (msg *TunnelDestroy) Type() Type {
 	return TypeTunnelDestroy
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *TunnelDestroy) Parse(data []byte) (err error) {
 	const size = 3 // padding
 	if len(data) < size {
@@ -103,10 +117,12 @@ func (msg *TunnelDestroy) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *TunnelDestroy) PackedSize() (n int) {
 	return 3
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *TunnelDestroy) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -117,14 +133,17 @@ func (msg *TunnelDestroy) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// TunnelRelay is used for the relay sub protocol which is used when passing data and commands through tunnels across multiple hops.
 type TunnelRelay struct {
 	EncData [MaxRelayDataSize]byte
 }
 
+// Type returns the type of the message.
 func (msg *TunnelRelay) Type() Type {
 	return TypeTunnelRelay
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *TunnelRelay) Parse(data []byte) (err error) {
 	const minSize = RelayHeaderSize
 	if len(data) < minSize || len(data) > MaxRelayDataSize {
@@ -135,10 +154,12 @@ func (msg *TunnelRelay) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *TunnelRelay) PackedSize() (n int) {
 	return RelayHeaderSize + len(msg.EncData)
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *TunnelRelay) Pack(buf []byte) (n int, err error) {
 	panic("must use PackRelayMessage instead")
 }
