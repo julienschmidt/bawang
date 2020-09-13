@@ -21,23 +21,20 @@ func TestRouterBuildTunnel(t *testing.T) {
 	require.Nil(t, err)
 	apiServer1, apiClient1 := net.Pipe()
 	apiConn1 := api.NewConnection(apiServer1)
-	router1, err := NewRouter(&cfgPeer1)
-	require.Nil(t, err)
+	router1 := newRouterWithRPS(&cfgPeer1, nil)
 	require.NotNil(t, router1)
 	router1.apiConnections = []*api.Connection{apiConn1}
 
 	cfgPeer2 := config.Config{}
 	err = cfgPeer2.FromFile("../.testing/peer-2.conf")
 	require.Nil(t, err)
-	router2, err := NewRouter(&cfgPeer2)
-	require.Nil(t, err)
+	router2 := newRouterWithRPS(&cfgPeer2, nil)
 	require.NotNil(t, router2)
 
 	cfgPeer3 := config.Config{}
 	err = cfgPeer3.FromFile("../.testing/peer-3.conf")
 	require.Nil(t, err)
-	router3, err := NewRouter(&cfgPeer3)
-	require.Nil(t, err)
+	router3 := newRouterWithRPS(&cfgPeer3, nil)
 	require.NotNil(t, router3)
 
 	cfgPeer4 := config.Config{}
@@ -45,8 +42,7 @@ func TestRouterBuildTunnel(t *testing.T) {
 	require.Nil(t, err)
 	apiServer4, apiClient4 := net.Pipe()
 	apiConn4 := api.NewConnection(apiServer4)
-	router4, err := NewRouter(&cfgPeer4)
-	require.Nil(t, err)
+	router4 := newRouterWithRPS(&cfgPeer4, nil)
 	require.NotNil(t, router4)
 	router4.apiConnections = []*api.Connection{apiConn4}
 

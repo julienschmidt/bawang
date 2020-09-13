@@ -216,6 +216,8 @@ func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
 // sendMsg sends a p2p.Message for the given tunnelID on this link. Handles packing of p2p.Header and p2p.Message packing.
 func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
 	link.l.Lock()
+	defer link.l.Unlock()
+
 	data := link.msgBuf[:]
 	n, err := p2p.PackMessage(data, tunnelID, msg)
 	if err != nil {
@@ -224,6 +226,6 @@ func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
 
 	data = data[:n]
 	_, err = link.nc.Write(data)
-	link.l.Unlock()
+
 	return err
 }

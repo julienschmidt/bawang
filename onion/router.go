@@ -46,6 +46,10 @@ func NewRouter(cfg *config.Config) (*Router, error) {
 		return nil, fmt.Errorf("error initializing RPS: %w", err)
 	}
 
+	return newRouterWithRPS(cfg, rps), nil
+}
+
+func newRouterWithRPS(cfg *config.Config, rps rps.RPS) *Router {
 	return &Router{
 		cfg:             cfg,
 		rps:             rps,
@@ -53,7 +57,7 @@ func NewRouter(cfg *config.Config) (*Router, error) {
 		outgoingTunnels: make(map[uint32]*Tunnel),
 		incomingTunnels: make(map[uint32]*tunnelSegment),
 		apiConnections:  []*api.Connection{},
-	}, nil
+	}
 }
 
 // RegisterAPIConnection adds an api.Connection to the onion router which will then receive future api.OnionTunnelIncoming
