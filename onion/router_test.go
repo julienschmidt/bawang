@@ -218,8 +218,7 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	assert.Equal(t, 0, len(router4.tunnels))
 
 	close(quitChan)
-
-	// time.Sleep(60 * time.Second)
+	time.Sleep(1 * time.Second)
 }
 
 func TestRouterHandleRounds(t *testing.T) {
@@ -282,6 +281,9 @@ func TestRouterHandleRounds(t *testing.T) {
 	assert.NotNil(t, router1.coverTunnel)
 	assert.Equal(t, 1, len(router1.outgoingTunnels))
 	assert.Equal(t, 1, len(router1.tunnels))
+
+	err = router1.SendCover(0)
+	assert.Nil(t, err)
 
 	close(quitChan)
 	time.Sleep(1 * time.Second)
