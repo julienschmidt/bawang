@@ -169,7 +169,7 @@ func relayTunnelExtendMsg(peerHostKey *rsa.PublicKey, address net.IP, port uint1
 	}
 
 	msg = &p2p.RelayTunnelExtend{
-		IPv6:        address.To16() != nil, // TODO: figure out if this is hacky or intended
+		IPv6:        address.To16() != nil,
 		Address:     address,
 		Port:        port,
 		EncDHPubKey: *encDHPubKey,

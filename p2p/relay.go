@@ -48,6 +48,14 @@ type RelayHeader struct {
 	Digest    [8]byte
 }
 
+func (hdr *RelayHeader) GetCounter() (ctr uint32) {
+	counterBytes := make([]byte, 4)
+	copy(counterBytes[1:], hdr.Counter[:])
+	ctr = binary.BigEndian.Uint32(counterBytes)
+
+	return ctr
+}
+
 func (hdr *RelayHeader) Parse(data []byte) (err error) {
 	if len(data) < RelayHeaderSize {
 		return ErrInvalidMessage
@@ -138,7 +146,7 @@ func PackRelayMessage(buf []byte, oldCounter uint32, msg RelayMessage) (newCount
 	counterBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(counterBytes, newCounter)
 	hdr := RelayHeader{
-		Counter:   [3]byte{counterBytes[1], counterBytes[2], counterBytes[3]}, // TODO: is this correct?
+		Counter:   [3]byte{counterBytes[1], counterBytes[2], counterBytes[3]},
 		RelayType: msg.Type(),
 		Size:      uint16(msg.PackedSize() + RelayHeaderSize),
 	}

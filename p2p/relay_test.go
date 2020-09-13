@@ -68,6 +68,16 @@ func TestRelayHeaderParse(t *testing.T) {
 	})
 }
 
+func TestRelayHeaderGetCounter(t *testing.T) {
+	in := RelayHeader{
+		Counter: [3]byte{1, 2, 3},
+	}
+
+	targetCtr := binary.BigEndian.Uint32([]byte{0, 1, 2, 3})
+	ctr := in.GetCounter()
+	assert.Equal(t, targetCtr, ctr)
+}
+
 func TestRelayHeaderPack(t *testing.T) {
 	in := RelayHeader{
 		Counter:   [3]byte{1, 2, 3},

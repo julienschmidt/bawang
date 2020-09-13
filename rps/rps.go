@@ -124,7 +124,7 @@ func (r *rps) GetPeer() (peer *Peer, err error) {
 		Address: reply.Address,
 		Port:    port,
 	}
-	peer.HostKey, err = x509.ParsePKCS1PublicKey(reply.DestHostKey) // TODO: verify
+	peer.HostKey, err = x509.ParsePKCS1PublicKey(reply.DestHostKey)
 	if err != nil {
 		log.Printf("Received peer with invalid host key from rps module: %v", err)
 		return nil, err

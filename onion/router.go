@@ -73,7 +73,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 	}
 
 	// now we register a output channel for this link
-	dataOut := make(chan message, 5) // TODO: determine queue size
+	dataOut := make(chan message, 5)
 	err = link.register(tunnelID, dataOut)
 	if err != nil {
 		return nil, err
@@ -368,28 +368,38 @@ func (r *Router) newTunnelID() (tunnelID uint32) {
 	return tunnelID
 }
 
-func (r *Router) RemoveTunnel(tunnelID uint32) {
+func (r *Router) removeLink(link *Link) {
+	for i, ln := range r.links {
+		if ln == link {
+			r.links = append(r.links[:i], r.links[i+1:]...)
+			break
+		}
+	}
+}
+
+func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 	if _, ok := r.tunnels[tunnelID]; !ok {
 		return
 	}
-
-	// TODO: determine if we can even send an error message to the api in a way to let them know the tunnel is gone
-	// onionErrMsg := api.OnionError{
-	// 	TunnelID: tunnelID,
-	// 	RequestType: api.TypeOnionTunnelReady,
-	// }
-	// err = onion.SendMsgToAPI(tunnelID, &onionErrMsg)
-
 	for _, link := range r.links {
 		if link.hasTunnel(tunnelID) {
 			link.removeTunnel(tunnelID)
+			if link.isUnused() {
+				linkError := link.destroy()
+				if linkError != nil && err == nil {
+					err = linkError
+				}
+
+				r.removeLink(link)
+			}
 		}
 	}
 
 	delete(r.tunnels, tunnelID)
 	delete(r.outgoingTunnels, tunnelID)
 	delete(r.incomingTunnels, tunnelID)
-	// log.Printf("removing tunnel with ID %v from router\n", tunnelID)
+
+	return err
 }
 
 func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error) {
@@ -400,7 +410,7 @@ func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error)
 
 	r.links = append(r.links, link)
 
-	go r.handleLink(link, make(chan error, 1)) // TODO: make this error outputting more sane
+	go r.handleLink(link)
 
 	return link, nil
 }
@@ -436,8 +446,10 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 	// This is the handler go routine for outgoing tunnels that we initiated.
 	// It is assumed that the handshake with the peers is completed and the tunnel is fully initiated at this point!
 	defer func() {
-		tunnel.link.removeTunnel(tunnel.id)
-		r.RemoveTunnel(tunnel.id)
+		err := r.RemoveTunnel(tunnel.id)
+		if err != nil {
+			log.Printf("Error removing tunnel from link with ID %v: %v\n", tunnel.ID(), err)
+		}
 	}()
 
 	for {
@@ -457,6 +469,14 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 				}
 
 				if ok { // message is meant for us from a hop
+					if relayHdr.GetCounter() <= tunnel.counter {
+						log.Printf("received message with invalid counter terminating tunnel")
+						return
+					}
+
+					// update message counter
+					tunnel.counter = relayHdr.GetCounter()
+
 					switch relayHdr.RelayType {
 					case p2p.RelayTypeTunnelData:
 						dataMsg := p2p.RelayTunnelData{}
@@ -504,7 +524,7 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	// This is the handler go routine for incoming tunnels that either are terminated by us or where we are just
 	// an in-between hop. The handshake of the previous hop to us is assumed to be done we can, however, receive
 	// TunnelExtend commands.
-	dataChanPrevHop := make(chan message, 5) // TODO: determine buffer size
+	dataChanPrevHop := make(chan message, 5)
 	dataChanNextHop := make(chan message, 5)
 	err := tunnel.prevHopLink.register(tunnel.prevHopTunnelID, dataChanPrevHop)
 	if err != nil {
@@ -512,11 +532,15 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 		return
 	}
 	defer func() {
-		tunnel.prevHopLink.removeTunnel(tunnel.prevHopTunnelID)
-		r.RemoveTunnel(tunnel.prevHopTunnelID)
+		removeErr := r.RemoveTunnel(tunnel.prevHopTunnelID)
+		if removeErr != nil {
+			log.Printf("Error removing tunnel from link with ID %v: %v\n", tunnel.prevHopTunnelID, removeErr)
+		}
 		if tunnel.nextHopLink != nil {
-			r.RemoveTunnel(tunnel.nextHopTunnelID)
-			tunnel.nextHopLink.removeTunnel(tunnel.nextHopTunnelID)
+			removeErr = r.RemoveTunnel(tunnel.nextHopTunnelID)
+			if removeErr != nil {
+				log.Printf("Error removing tunnel from link with ID %v: %v\n", tunnel.nextHopTunnelID, removeErr)
+			}
 		}
 	}()
 
@@ -547,6 +571,14 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 					if err != nil {
 						return
 					}
+
+					if relayHdr.GetCounter() <= tunnel.counter {
+						log.Printf("received message with invalid counter terminating tunnel")
+						return
+					}
+
+					// update message counter
+					tunnel.counter = relayHdr.GetCounter()
 
 					switch relayHdr.RelayType {
 					case p2p.RelayTypeTunnelData:
@@ -728,11 +760,21 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	}
 }
 
-func (r *Router) handleLink(link *Link, errOut chan error) {
+func (r *Router) handleLink(link *Link) {
 	var msgBuf [p2p.MaxSize]byte
 	rd := bufio.NewReader(link.nc)
+	goRoutineErr := make(chan error, 10)
 
-	for { // TODO: close on quit signal
+	for {
+		select {
+		case <-link.Quit:
+			log.Printf("Terminating link")
+			return
+		case err := <-goRoutineErr:
+			log.Printf("Error in goroutine: %v\n", err)
+		default:
+		}
+
 		// read the message header
 		var hdr p2p.Header
 		err := hdr.Read(rd)
@@ -740,7 +782,6 @@ func (r *Router) handleLink(link *Link, errOut chan error) {
 			if err == io.EOF {
 				return
 			}
-			errOut <- err
 			log.Printf("Error reading message header: %v", err)
 			return
 		}
@@ -749,10 +790,11 @@ func (r *Router) handleLink(link *Link, errOut chan error) {
 		data := msgBuf[:p2p.MaxMessageSize]
 		_, err = io.ReadFull(rd, data)
 		if err != nil {
-			errOut <- err
 			log.Printf("Error reading message body: %v, ignoring message", err)
-			// TODO: terminate the tunnel with read error
-			r.RemoveTunnel(hdr.TunnelID)
+			err = r.RemoveTunnel(hdr.TunnelID)
+			if err != nil {
+				log.Printf("Error removing tunnel with ID: %v, %v\n", hdr.TunnelID, err)
+			}
 			continue
 		}
 
@@ -762,7 +804,6 @@ func (r *Router) handleLink(link *Link, errOut chan error) {
 		} else {
 			// we receive the first message on this link for a tunnel we do not know yet
 			if hdr.Type != p2p.TypeTunnelCreate { // the first message for a new tunnel MUST be Tunnel Create
-				errOut <- p2p.ErrInvalidMessage
 				log.Printf("Error: received first message for new tunnel that is not tunnel create")
 				continue
 			}
@@ -770,14 +811,20 @@ func (r *Router) handleLink(link *Link, errOut chan error) {
 			err = msg.Parse(data)
 			if err != nil {
 				log.Printf("Error parsing tunnel create message: %v", err)
-				r.RemoveTunnel(hdr.TunnelID)
+				err = r.RemoveTunnel(hdr.TunnelID)
+				if err != nil {
+					log.Printf("Error removing tunnel with ID: %v, %v\n", hdr.TunnelID, err)
+				}
 				continue
 			}
 
 			dhShared, tunnelCreated, err := handleTunnelCreate(&msg, r.cfg)
 			if err != nil {
 				log.Printf("Error handling tunnel create message: %v", err)
-				r.RemoveTunnel(hdr.TunnelID)
+				err = r.RemoveTunnel(hdr.TunnelID)
+				if err != nil {
+					log.Printf("Error removing tunnel with ID: %v, %v\n", hdr.TunnelID, err)
+				}
 				continue
 			}
 
@@ -795,13 +842,12 @@ func (r *Router) handleLink(link *Link, errOut chan error) {
 			}
 			err = link.sendMsg(hdr.TunnelID, tunnelCreated)
 			if err != nil {
-				errOut <- err
 				log.Printf("Error sending tunnel created message: %v", err)
 				continue
 			}
 
 			// now we start the normal message handling for this tunnel
-			go r.handleTunnelSegment(&receivingTunnel, errOut)
+			go r.handleTunnelSegment(&receivingTunnel, goRoutineErr)
 		}
 	}
 }

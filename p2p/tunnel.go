@@ -88,7 +88,6 @@ func (msg *TunnelCreated) Pack(buf []byte) (n int, err error) {
 }
 
 type TunnelDestroy struct {
-	// TODO: somehow auth?
 }
 
 func (msg *TunnelDestroy) Type() Type {

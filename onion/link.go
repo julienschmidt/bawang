@@ -64,12 +64,15 @@ func newLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *
 	}
 }
 
+func (link *Link) isUnused() (unused bool) {
+	return len(link.dataOut) == 0
+}
+
 func (link *Link) connect() (err error) {
 	tlsConfig := tls.Config{
 		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
 	}
 
-	// TODO: implement host key checking here
 	link.nc, err = tls.Dial("tcp", link.address.String()+":"+strconv.Itoa(int(link.port)), &tlsConfig)
 	if err != nil {
 		log.Printf("Error opening tls connection to peer: %v", err)
@@ -102,7 +105,6 @@ func (link *Link) removeTunnel(tunnelID uint32) {
 		close(link.dataOut[tunnelID])
 	}
 	delete(link.dataOut, tunnelID)
-	// TODO: if there are no more listeners on this link we shut it down
 }
 
 func (link *Link) destroy() (err error) {
