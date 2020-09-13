@@ -137,15 +137,13 @@ func (r *rps) SampleIntermediatePeers(n int, target *Peer) (peers []*Peer, err e
 		return nil, errors.New("invalid number of hops")
 	}
 
-	peers = make([]*Peer, n, 0)
+	peers = make([]*Peer, n)
 	for i := 0; i < n-1; i++ {
-		var peer *Peer
-		peer, err = r.GetPeer()
+		peers[i], err = r.GetPeer()
 		if err != nil {
 			return nil, err
 		}
-		peers = append(peers, peer)
 	}
-	peers = append(peers, target)
+	peers[n-1] = target
 	return peers, nil
 }
