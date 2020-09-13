@@ -96,7 +96,7 @@ After receiving the `TUNNEL CREATED` message both peers have derived the ephemer
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
 
-Sent to neighboring hops to initial tunnel teardown.
+Sent to neighboring hops to initiate tunnel teardown.
 When receiving a `TUNNEL DESTROY` message peers will tear down the tunnel and send a new `TUNNEL DESTROY` message to the next hop in the tunnel.
 
 
