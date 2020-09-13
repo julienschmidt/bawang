@@ -30,10 +30,11 @@ type Link struct {
 	address net.IP
 	port    uint16
 
+	nc net.Conn
+	rd *bufio.Reader
+
 	l      sync.Mutex // guards fields below
 	msgBuf [p2p.MessageSize]byte
-	nc     net.Conn
-	rd     *bufio.Reader
 
 	// data channels for communication with other goroutines
 	dataOut map[uint32]chan message // output data channels for received messages with corresponding tunnel IDs
@@ -91,10 +92,8 @@ func (link *Link) connect() (err error) {
 		return
 	}
 
-	link.l.Lock()
 	link.nc = nc
 	link.rd = bufio.NewReader(nc)
-	link.l.Unlock()
 
 	return nil
 }
@@ -162,9 +161,6 @@ func (link *Link) Close() {
 
 // readMsg reads a message from the underlying network connection and returns its type and message body.
 func (link *Link) readMsg() (msg message, err error) {
-	link.l.Lock()
-	defer link.l.Unlock()
-
 	// read the message header
 	var hdr p2p.Header
 	if err = hdr.Read(link.rd); err != nil {
@@ -172,6 +168,8 @@ func (link *Link) readMsg() (msg message, err error) {
 	}
 
 	// ready message body
+	link.l.Lock()
+	defer link.l.Unlock()
 	body := link.msgBuf[:p2p.MaxBodySize]
 	_, err = io.ReadFull(link.rd, body)
 	if err != nil {
@@ -191,14 +189,16 @@ func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 		return p2p.ErrInvalidMessage
 	}
 
-	link.l.Lock()
-	data := link.msgBuf[:]
 	header := p2p.Header{
 		TunnelID: tunnelID,
 		Type:     p2p.TypeTunnelRelay,
 	}
+
+	link.l.Lock()
+
+	data := link.msgBuf[:]
 	header.Pack(data[:p2p.HeaderSize])
-	copy(data[p2p.HeaderSize:len(msg)+p2p.HeaderSize], msg)
+	copy(data[p2p.HeaderSize:], msg)
 
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
