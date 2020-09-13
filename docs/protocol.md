@@ -232,8 +232,12 @@ Relay sub protocol message to finally pass normal data payload along the constru
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                       Digest (8 byte)                         |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    Reserved / Padding       |P|      Reserved / Padding       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ~~~
-
+We send a relay cover message as tunnel cover traffic.
+According to the specification cover traffic is only sent on outgoing random tunnels and then echoed back.
+The bit `P` specifies whether this is a Ping or a Pong message, i.e. whether it is the original cover message or the echo.
 
 ## Protocol Flow
 

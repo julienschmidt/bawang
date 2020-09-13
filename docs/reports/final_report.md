@@ -83,7 +83,7 @@ See [docs/protocol.md](../protocol.md).
 
 * Added [`TUNNEL RELAY COVER` message](../protocol.md#tunnel-relay-cover), required for cover traffic
 * Added a counter to the [Relay Sub Protocol Header](../protocol.md#relay-sub-protocol-header), required for secure encryption but also used for replay protection
-* Increased the size of `Encrypted Diffie-Hellman Public Key` to   512 byte in [`TUNNEL CREATE`](../protocol.md#tunnel-create) and [`TUNNEL RELAY EXTENDED`](../protocol.md#tunnel-relay-extended) as 4096 bit RSA has a block size of 512 byte (4096 bit). Consequently, the size of P2P messages had to be increased from 512 byte to 1024 byte to fit the larger message types.
+* Increased the size of `Encrypted Diffie-Hellman Public Key` to 512 byte in [`TUNNEL CREATE`](../protocol.md#tunnel-create) and [`TUNNEL RELAY EXTENDED`](../protocol.md#tunnel-relay-extended) as 4096 bit RSA has a block size of 512 byte (4096 bit). Consequently, the size of P2P messages had to be increased from 512 byte to 1024 byte to fit the larger message types.
 
 
 ## Setup Instructions

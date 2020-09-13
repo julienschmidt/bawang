@@ -27,6 +27,7 @@ type RelayMessage interface {
 }
 
 const flagIPv6 = 1
+const flagCoverPing = 1
 
 // RelayHeader is the header of a relay sub protocol protocol cell.
 type RelayHeader struct {
@@ -384,4 +385,38 @@ func (msg *RelayTunnelData) Pack(buf []byte) (n int, err error) {
 	copy(buf[:len(msg.Data)], msg.Data)
 	n = len(msg.Data)
 	return
+}
+
+type RelayTunnelCover struct {
+	Ping bool
+}
+
+// Type returns the relay type of the message.
+func (msg *RelayTunnelCover) Type() RelayType {
+	return RelayTypeTunnelCover
+}
+
+// Parse fills the struct with values parsed from the given bytes slice.
+func (msg *RelayTunnelCover) Parse(data []byte) (err error) {
+	msg.Ping = data[0]&flagCoverPing > 0
+	return
+}
+
+// PackedSize returns the number of bytes required if serialized to bytes.
+func (msg *RelayTunnelCover) PackedSize() (n int) {
+	return 1
+}
+
+// Pack serializes the values into a bytes slice.
+func (msg *RelayTunnelCover) Pack(buf []byte) (n int, err error) {
+	if len(buf) < 1 {
+		err = ErrBufferTooSmall
+		return
+	}
+
+	buf[0] = 0x00
+	if msg.Ping {
+		buf[0] |= flagCoverPing
+	}
+	return 1, nil
 }

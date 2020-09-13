@@ -4,6 +4,7 @@ package onion
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,10 @@ import (
 	"bawang/config"
 	"bawang/p2p"
 	"bawang/rps"
+)
+
+var (
+	ErrSendCoverNotAllowed = errors.New("manually created tunnels already exists, send cover is not allowed")
 )
 
 // Router is the central onion routing logic state tracking struct.
@@ -268,8 +273,45 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 }
 
 func (r *Router) SendCover(coverSize uint16) (err error) {
-	// TODO: implement
-	return
+	// first we check if there is a manually created tunnel, i.e. a tunnel on which api connections are listening
+	for _, tunnel := range r.outgoingTunnels {
+		if apiConns, ok := r.tunnels[tunnel.ID()]; ok && len(apiConns) != 0 {
+			return ErrSendCoverNotAllowed
+		}
+	}
+
+	var tunnel *Tunnel
+	for _, tunnel = range r.outgoingTunnels {
+		break
+	}
+	if tunnel == nil {
+		return ErrInvalidTunnel
+	}
+
+	for coverSize > 0 { // we send fixed size cover traffic until the desired cover size is reached
+		relayCover := &p2p.RelayTunnelCover{Ping: true}
+
+		var n int
+		buf := make([]byte, p2p.RelayMessageSize)
+		tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, relayCover)
+		if err != nil {
+			return err
+		}
+
+		var encryptedMsg []byte
+		encryptedMsg, err = tunnel.EncryptRelayMsg(buf[:n])
+		if err != nil {
+			return err
+		}
+
+		err = tunnel.link.sendRelay(tunnel.ID(), encryptedMsg)
+		if err != nil {
+			return err
+		}
+		coverSize -= p2p.MessageSize
+	}
+
+	return nil
 }
 
 // sendMsgToAPI sends a api.Message to all api.Connection that are registered for the given tunnel ID
@@ -688,6 +730,32 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 
 			case <-time.After(time.Duration(r.cfg.BuildTimeout) * time.Second): // timeout
 				return ErrTimedOut
+			}
+		case p2p.RelayTypeTunnelCover:
+			coverMsg := p2p.RelayTunnelCover{}
+			err = coverMsg.Parse(decryptedRelayMsg)
+			if err != nil {
+				return err
+			}
+
+			if coverMsg.Ping { // we received a ping message, echo it back as pong
+				coverReply := p2p.RelayTunnelCover{Ping: false}
+				var n int
+				tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &coverReply)
+				if err != nil {
+					return err
+				}
+
+				var encryptedCoverReply []byte
+				encryptedCoverReply, err = p2p.EncryptRelay(buf[:n], tunnel.dhShared)
+				if err != nil {
+					return err
+				}
+
+				err = tunnel.prevHopLink.sendRelay(tunnel.prevHopTunnelID, encryptedCoverReply)
+				if err != nil {
+					return err
+				}
 			}
 		default:
 			return p2p.ErrInvalidMessage
