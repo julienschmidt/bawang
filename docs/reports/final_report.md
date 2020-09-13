@@ -91,6 +91,10 @@ See [docs/protocol.md](../protocol.md).
 See [README.md](../../README.md).
 
 
+## Known Issues
+- `verbose` config option is ignored.
+
+
 ## Future Work
 
 - Fully integrate the `voidphone_testing` library into our continuous integration testing. We found `voidphone_testing` to be horrible documented and hard / unintuitive to use. We eventually came to the conclusion, that it was not worth the effort to get it running.
