@@ -187,8 +187,16 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	// now we tear down the tunnel from the receiving end
 	err = router4.RemoveAPIConnection(apiConn4)
 	require.Nil(t, err)
-	_, _ = rd.Read(apiBuf)      // empty the pipe buffer of api conn 1 otherwise writes will block since pipes are not buffered
-	time.Sleep(2 * time.Second) // wait for traffic to propagate
+
+	// simulate cleaning at beginning of new round
+	router4.removeUnusedTunnels()
+
+	// empty the pipe buffer of api conn 1 otherwise writes will block since pipes are not buffered
+	_, _ = rd.Read(apiBuf) // here
+
+	// wait for traffic to propagate
+	time.Sleep(2 * time.Second)
+
 	assert.Equal(t, 0, len(router1.outgoingTunnels))
 	assert.Equal(t, 0, len(router1.tunnels))
 

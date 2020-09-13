@@ -10,6 +10,7 @@ import (
 	"log"
 	mathRand "math/rand"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,10 +44,6 @@ type Router struct {
 
 	buildQueueLock sync.Mutex
 	buildQueue     []*buildTunnelJob
-
-	// TODO:
-	destroyQueueLock sync.Mutex
-	destroyQueue     []*buildTunnelJob
 
 	coverTunnel *Tunnel
 
@@ -92,6 +89,7 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 		case <-quit:
 			return
 		case <-roundTimer.C:
+			// build requested new tunnels
 			successfulBuilds := 0
 			r.buildQueueLock.Lock()
 			if len(r.buildQueue) > 0 {
@@ -113,24 +111,33 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 
 			// if we have an actual tunnel now, but did not before, we can close the cover tunnel now.
 			if successfulBuilds > 0 {
+				r.tunnelsLock.Lock()
 				if r.coverTunnel != nil {
-					err = r.coverTunnel.Close()
-					if err != nil {
-						errOut <- fmt.Errorf("error closing cover tunnel: %w", err)
-						return
-					}
+					_ = r.coverTunnel.Close()
 					r.coverTunnel = nil
 				}
+				r.tunnelsLock.Unlock()
 			}
 
-			// TODO: handle destroy queue
+			// check all tunnels if they still have associated API connections. If not, they can be destructed.
+			r.removeUnusedTunnels()
 
 			r.tunnelsLock.Lock()
-			for _, tunnel := range r.outgoingTunnels {
-				err = r.rebuildTunnel(tunnel)
+			// renew all remaining outgoing tunnels
+			if len(r.outgoingTunnels) > 0 {
+				for _, tunnel := range r.outgoingTunnels {
+					err = r.rebuildTunnel(tunnel)
+					if err != nil {
+						errOut <- fmt.Errorf("error rebuilding tunnel: %w", err)
+						// r.tunnelsLock.Unlock()
+						return
+					}
+				}
+			} else {
+				// if we do not have any remaining outgoing tunnels, we create a cover tunnel
+				err := r.buildCoverTunnel()
 				if err != nil {
-					errOut <- fmt.Errorf("error rebuilding tunnel: %w", err)
-					// r.tunnelsLock.Unlock()
+					errOut <- fmt.Errorf("error building cover tunnel: %w", err)
 					return
 				}
 			}
@@ -582,7 +589,6 @@ func (r *Router) RemoveAPIConnection(apiConn *api.Connection) (err error) {
 }
 
 // RemoveAPIConnectionFromTunnel unregisters an api.Connection as a listener on the given tunnel.
-// Will also initiate tunnel teardown if no api.Connection is registered for the tunnel anymore.
 func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) (err error) {
 	r.tunnelsLock.Lock()
 	defer r.tunnelsLock.Unlock()
@@ -598,15 +604,28 @@ func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 		}
 	}
 
-	if len(r.tunnels[tunnelID]) == 0 { // the last API connection unregistered, we tear down the tunnel now
-		if outgoingTunnel, ok := r.outgoingTunnels[tunnelID]; ok {
-			err = outgoingTunnel.Close()
-		} else if incomingTunnel, ok := r.incomingTunnels[tunnelID]; ok {
-			err = incomingTunnel.Close()
-		}
-	}
+	// If no api.Connection is registered for the tunnel anymore, it will be torn down at the beginning of the next round.
 
 	return err
+}
+
+// removeUnusedTunnels checks all tunnels if they still have associated API connections. If not, they are destructed.
+func (r *Router) removeUnusedTunnels() {
+	r.tunnelsLock.Lock()
+	for tunnelID, conns := range r.tunnels {
+		if len(conns) == 0 {
+			if outgoingTunnel, ok := r.outgoingTunnels[tunnelID]; ok {
+				_ = outgoingTunnel.Close()
+				delete(r.outgoingTunnels, tunnelID)
+				delete(r.tunnels, tunnelID)
+			} else if incomingTunnel, ok := r.incomingTunnels[tunnelID]; ok {
+				_ = incomingTunnel.Close()
+				delete(r.incomingTunnels, tunnelID)
+				delete(r.tunnels, tunnelID)
+			}
+		}
+	}
+	r.tunnelsLock.Unlock()
 }
 
 // newTunnelID generates a new, non-existing unique tunnel ID
@@ -653,6 +672,8 @@ func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 	if !ok {
 		return
 	}
+
+	r.linksLock.Lock()
 	for _, link := range r.links {
 		if link.hasTunnel(tunnelID) {
 			link.removeTunnel(tunnelID)
@@ -661,6 +682,7 @@ func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 			}
 		}
 	}
+	r.linksLock.Unlock()
 
 	r.tunnelsLock.Lock()
 	delete(r.tunnels, tunnelID)
@@ -1092,25 +1114,26 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 // handleLink is the goroutine handler for a Link that reads from the underlying tls.Conn and passes received p2p.Message
 // to the respective tunnel handler via the registered Link.dataOut channel.
 func (r *Router) handleLink(link *Link) {
+	const connClosed = "use of closed network connection"
+
 	goRoutineErr := make(chan error, 10)
 	shuttingDown := false
 	go func() {
 		select {
 		case <-link.Quit:
 			log.Printf("Terminating link")
-			shuttingDown = true
-			r.removeLink(link)
-			_ = link.destroy()
-			return
 		case err := <-goRoutineErr:
 			log.Printf("Error in goroutine: %v\n", err)
 		}
+		shuttingDown = true
+		r.removeLink(link)
+		_ = link.destroy()
 	}()
 
 	for {
 		msg, err := link.readMsg()
 		if err != nil {
-			if shuttingDown || err == io.EOF {
+			if shuttingDown || err == io.EOF || strings.Contains(err.Error(), connClosed) {
 				return // connection closed cleanly
 			}
 			log.Printf("Error reading message body: %v, ignoring message", err)
@@ -1121,7 +1144,7 @@ func (r *Router) handleLink(link *Link) {
 			continue
 		}
 
-		dataOut, ok := link.dataOut[msg.hdr.TunnelID]
+		dataOut, ok := link.getDataOut(msg.hdr.TunnelID)
 		if ok {
 			dataOut <- msg
 		} else {
