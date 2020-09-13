@@ -137,11 +137,18 @@ func (link *Link) removeTunnel(tunnelID uint32) {
 	delete(link.dataOut, tunnelID)
 }
 
-// destroy terminates this Link connection by terminating the goroutine Link handler and closing the underlying net.Conn
+// destroy terminates this Link connection by closing all data channels and closing the underlying net.Conn
 func (link *Link) destroy() (err error) {
-	close(link.Quit)
+	for _, dataChan := range link.dataOut {
+		close(dataChan)
+	}
 	err = link.nc.Close()
 	return
+}
+
+// Close stops the goroutine Link handler
+func (link *Link) Close() {
+	close(link.Quit)
 }
 
 // readMsg reads a message from the underlying network connection and returns its type and message body.

@@ -428,12 +428,7 @@ func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 		if link.hasTunnel(tunnelID) {
 			link.removeTunnel(tunnelID)
 			if link.isUnused() {
-				linkError := link.destroy()
-				if linkError != nil && err == nil {
-					err = linkError
-				}
-
-				r.removeLink(link)
+				link.Close()
 			}
 		}
 	}
@@ -819,11 +814,7 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 
 		case <-tunnel.prevHopLink.Quit:
 			if tunnel.nextHopLink != nil {
-				err = tunnel.nextHopLink.destroy()
-				if err != nil {
-					errOut <- err
-					return
-				}
+				tunnel.nextHopLink.Close()
 			}
 			return
 		case <-tunnel.quit:
@@ -836,6 +827,14 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 // to the respective tunnel handler via the registered Link.dataOut channel.
 func (r *Router) handleLink(link *Link) {
 	goRoutineErr := make(chan error, 10)
+
+	defer func() {
+		r.removeLink(link)
+		err := link.destroy()
+		if err != nil {
+			log.Printf("error terminating link %v\n", err)
+		}
+	}()
 
 	for {
 		select {

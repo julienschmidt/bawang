@@ -55,6 +55,11 @@ Likewise, relayed packets (in `TUNNEL RELAY`) have fixed size 1008 (1024 minus t
 
 The relay header contains a digest for end-to-end checksum for integrity checking.
 
+To have both replay protection and unique IVs for our AES CTR encryption we use a monotonically increasing counter in our relay sub protocol packets.
+
+### Error Handling
+
+In case of misbehaving peers or network errors we cleanly tear down all tunnels using the affected peer.
 
 #### VoidPhone API
 
