@@ -91,7 +91,7 @@ func (r *Router) buildTunnelWithHops(hops []*rps.Peer, apiConn *api.Connection) 
 	tunnelID := r.newTunnelID()
 
 	// first we fetch us a link connection to the first hop
-	log.Printf("starting to initialize onion circuit with first hop %v:%v\n", hops[0].Address, hops[0].Port)
+	log.Printf("Starting to initialize onion circuit with first hop %v:%v\n", hops[0].Address, hops[0].Port)
 	link, err := r.GetOrCreateLink(hops[0].Address, hops[0].Port)
 	if err != nil {
 		return nil, err
@@ -127,8 +127,6 @@ func (r *Router) buildTunnelWithHops(hops []*rps.Peer, apiConn *api.Connection) 
 		if created.hdr.Type != p2p.TypeTunnelCreated {
 			return nil, p2p.ErrInvalidMessage
 		}
-
-		log.Println("received tunnel created")
 
 		createdMsg := p2p.TunnelCreated{}
 		err = createdMsg.Parse(created.body)
@@ -287,7 +285,7 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 	}
 	for _, apiConn := range apiConns {
 		sendError := apiConn.Send(msg)
-		log.Printf("sent message to api")
+		log.Printf("Sent message to API")
 		if sendError != nil {
 			sendError = apiConn.Terminate()
 			if sendError != nil {
@@ -383,7 +381,7 @@ func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 		}
 	}
 
-	if len(r.tunnels[tunnelID]) == 0 { // the last api connection unregistered, we tear down the tunnel now
+	if len(r.tunnels[tunnelID]) == 0 { // the last API connection unregistered, we tear down the tunnel now
 		if outgoingTunnel, ok := r.outgoingTunnels[tunnelID]; ok {
 			err = outgoingTunnel.Close()
 		} else if incomingTunnel, ok := r.incomingTunnels[tunnelID]; ok {
@@ -503,7 +501,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel) {
 
 	dataOut, ok := tunnel.link.getDataOut(tunnel.id)
 	if !ok {
-		log.Printf("failed to get data channel for outgoing tunnel %v\n", tunnel.id)
+		log.Printf("Failed to get data channel for outgoing tunnel %v\n", tunnel.id)
 		return
 	}
 
@@ -519,13 +517,14 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel) {
 			case p2p.TypeTunnelRelay:
 				relayHdr, decryptedRelayMsg, ok, err := tunnel.DecryptRelayMessage(msg.body)
 				if err != nil {
-					log.Printf("error decrypting relay message on outgoing tunnel %v\n", tunnel.id)
+					log.Printf("Error decrypting relay message on outgoing tunnel %v\n", tunnel.id)
 					return
 				}
 
 				if ok { // message is meant for us from a hop
+					// replay protection
 					if relayHdr.GetCounter() <= tunnel.counter {
-						log.Printf("received message with invalid counter terminating tunnel")
+						log.Printf("Received message with invalid counter. Terminating tunnel.")
 						return
 					}
 
@@ -537,23 +536,23 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel) {
 						dataMsg := p2p.RelayTunnelData{}
 						err = dataMsg.Parse(decryptedRelayMsg)
 						if err != nil {
-							log.Printf("error parsing relay data message on outgoing tunnel %v\n", tunnel.id)
+							log.Printf("Error parsing relay data message on outgoing tunnel %v\n", tunnel.id)
 							return
 						}
 
 						err = r.sendDataToAPI(hdr.TunnelID, dataMsg.Data)
 						if err != nil {
-							log.Printf("error sending incoming data to API for outgoing tunnel %v\n", tunnel.id)
+							log.Printf("Error sending incoming data to API for outgoing tunnel %v\n", tunnel.id)
 							return
 						}
 
 					default:
-						log.Printf("received invalid subtype of relay message on outgoing tunnel %v\n", tunnel.id)
+						log.Printf("Received invalid subtype of relay message on outgoing tunnel %v\n", tunnel.id)
 						return
 					}
 				} else {
 					// we received a non-decryptable relay message, tear down the tunnel
-					log.Printf("received un-decryptable relay message on outgoing tunnel %v\n", tunnel.id)
+					log.Printf("Received un-decryptable relay message on outgoing tunnel %v\n", tunnel.id)
 					_ = tunnel.link.sendDestroyTunnel(tunnel.id)
 					// in case of an error here we cannot really do much apart from tearing down the tunnel anyway
 					return
@@ -566,12 +565,12 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel) {
 					TunnelID: tunnel.ID(),
 				})
 				if err != nil {
-					log.Printf("error announcing tunnel destroy for ID %v to api %v\n", tunnel.ID(), err)
+					log.Printf("Error announcing tunnel destroy for ID %v to api %v\n", tunnel.ID(), err)
 				}
 				return
 
 			default: // since we assume the circuit to be fully built we cannot accept any other message
-				log.Printf("received invalid message on outgoing tunnel %v\n", tunnel.id)
+				log.Printf("Received invalid message on outgoing tunnel %v\n", tunnel.id)
 				return
 			}
 
@@ -599,8 +598,9 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 			return
 		}
 
+		// replay protection
 		if relayHdr.GetCounter() <= tunnel.counter {
-			log.Printf("received message with invalid counter terminating tunnel")
+			log.Printf("Received message with invalid counter. Terminating tunnel.")
 			return
 		}
 
