@@ -16,6 +16,7 @@ import (
 	"bawang/config"
 )
 
+// ListenOnionSocket opens a tls listener on the host specified in cfg that handles incoming p2p onion traffic.
 func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, quit chan struct{}) {
 	cert, err := tlsCertFromHostKey(cfg.HostKey)
 	if err != nil {
@@ -74,16 +75,15 @@ func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, qu
 
 		log.Printf("Received new connection from peer %v:%v\n", ip, port)
 
-		link, err := router.CreateLinkFromExistingConn(net.ParseIP(ip), uint16(portParsed), tlsConn)
+		_, err = router.CreateLinkFromExistingConn(tlsConn)
 		if err != nil {
 			log.Printf("Error creating link to %v:%v: %v\n", ip, portParsed, err)
 			continue
 		}
-
-		go router.handleLink(link)
 	}
 }
 
+// tlsCertFromHostKey creates a tls.Certificate from a given rsa.PrivateKey usable in tls.Listen or tls.Dial
 func tlsCertFromHostKey(hostKey *rsa.PrivateKey) (cert tls.Certificate, err error) {
 	// construct tls certificate from p2p hostkey
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)

@@ -21,6 +21,7 @@ var (
 	ErrMisbehavingPeer        = errors.New("a peer is sending invalid messages or violating protocol")
 )
 
+// Tunnel keeps track of the state of an onion tunnel initiated by the current peer.
 type Tunnel struct {
 	id      uint32
 	counter uint32
@@ -29,16 +30,19 @@ type Tunnel struct {
 	quit    chan struct{}
 }
 
+// ID returns the tunnel's ID
 func (tunnel *Tunnel) ID() uint32 {
 	return tunnel.id
 }
 
+// Close terminates the outgoing tunnel, sending p2p.TypeTunnelDestroy through the tunnel.
 func (tunnel *Tunnel) Close() (err error) {
 	close(tunnel.quit)
 	err = tunnel.link.sendDestroyTunnel(tunnel.ID())
 	return err
 }
 
+// EncryptRelayMsg encrypts a packed relay message with the intermediate hops keys.
 func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err error) {
 	encryptedMsg = relayMsg
 	for _, hop := range tunnel.hops {
@@ -50,6 +54,8 @@ func (tunnel *Tunnel) EncryptRelayMsg(relayMsg []byte) (encryptedMsg []byte, err
 	return
 }
 
+// DecryptRelayMessage removes the layered encryption from a received relay message.
+// If the checksum does not match will return ok=false.
 func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader, decryptedRelayMsg []byte, ok bool, err error) {
 	decryptedRelayMsg = data
 	for _, hop := range tunnel.hops {
@@ -74,6 +80,7 @@ func (tunnel *Tunnel) DecryptRelayMessage(data []byte) (relayHdr p2p.RelayHeader
 	return relayHdr, nil, false, p2p.ErrInvalidMessage
 }
 
+// tunnelSegment is used to keep track of an incoming tunnels state.
 type tunnelSegment struct {
 	prevHopTunnelID uint32
 	nextHopTunnelID uint32
@@ -85,6 +92,7 @@ type tunnelSegment struct {
 	quit chan struct{}
 }
 
+// Close terminates a tunnelSegment sending p2p.TypeTunnelDestroy messages to the previous and next hop.
 func (tunnel *tunnelSegment) Close() (err error) {
 	close(tunnel.quit)
 	err = tunnel.prevHopLink.sendDestroyTunnel(tunnel.prevHopTunnelID)
@@ -97,6 +105,7 @@ func (tunnel *tunnelSegment) Close() (err error) {
 	return err
 }
 
+// handleTunnelCreate returns the shared Diffie-Hellman key and a p2p.TunnelCreated response for an incoming p2p.TunnelCreate command.
 func handleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[32]byte, response *p2p.TunnelCreated, err error) {
 	if msg.Version != 1 {
 		return nil, nil, ErrInvalidProtocolVersion
@@ -129,6 +138,7 @@ func handleTunnelCreate(msg *p2p.TunnelCreate, cfg *config.Config) (dhShared *[3
 	return dhShared, response, nil
 }
 
+// generateDHKeys generates new Diffie-Hellman keys, encrypting the public part with the given peers host identifier key.
 func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *[512]byte, err error) {
 	pubDH, privDH, err := box.GenerateKey(rand.Reader)
 	if err != nil {
@@ -149,6 +159,8 @@ func generateDHKeys(peerHostKey *rsa.PublicKey) (privDH *[32]byte, encDHPubKey *
 	return privDH, encDHPubKey, nil
 }
 
+// tunnelCreateMsg generates new Diffie-Hellman keys and a p2p.TunnelCreate to initiate a new onion connection
+// to a new peer.
 func tunnelCreateMsg(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.TunnelCreate, err error) {
 	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
 	if err != nil {
@@ -162,6 +174,8 @@ func tunnelCreateMsg(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.Tun
 	return privDH, msg, nil
 }
 
+// relayTunnelExtendMsg generates new Diffie-Hellan keys and a p2p.RelayTunnelExtend to extend an existing onion tunnel
+// to the given peer.
 func relayTunnelExtendMsg(peerHostKey *rsa.PublicKey, address net.IP, port uint16) (privDH *[32]byte, msg *p2p.RelayTunnelExtend, err error) {
 	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)
 	if err != nil {
@@ -177,12 +191,14 @@ func relayTunnelExtendMsg(peerHostKey *rsa.PublicKey, address net.IP, port uint1
 	return privDH, msg, nil
 }
 
+// tunnelCreateMsgFromRelayTunnelExtendMsg creates a p2p.TunnelCreate from the given p2p.RelayTunnelExtend
 func tunnelCreateMsgFromRelayTunnelExtendMsg(msg *p2p.RelayTunnelExtend) (createMsg p2p.TunnelCreate) {
 	createMsg.EncDHPubKey = msg.EncDHPubKey
 	createMsg.Version = 1 // implement other versions of the handshake protocol here
 	return
 }
 
+// relayTunnelExtendedMsgFromTunnelCreatedMsg returns a p2p.RelayTunnelExtended from the given p2p.TunnelCreated
 func relayTunnelExtendedMsgFromTunnelCreatedMsg(msg *p2p.TunnelCreated) (extendedMsg p2p.RelayTunnelExtended) {
 	extendedMsg.DHPubKey = msg.DHPubKey
 	extendedMsg.SharedKeyHash = msg.SharedKeyHash

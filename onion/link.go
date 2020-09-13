@@ -19,11 +19,13 @@ var (
 	ErrAlreadyRegistered = errors.New("a listener is already registered for this tunnel ID")
 )
 
+// message is a simple internal struct to combine a p2p.Header with the packet payload
 type message struct {
 	hdr  p2p.Header
 	body []byte
 }
 
+// Link abstracts TLS level connections between peers which can be reused by multiple tunnels
 type Link struct {
 	address net.IP
 	port    uint16
@@ -38,6 +40,7 @@ type Link struct {
 	Quit    chan struct{}
 }
 
+// newLink opens a new TLS connection to a peer given by address:port and returns a Link tracking that connection
 func newLink(address net.IP, port uint16) (link *Link, err error) {
 	link = &Link{
 		address: address,
@@ -54,10 +57,21 @@ func newLink(address net.IP, port uint16) (link *Link, err error) {
 	return link, nil
 }
 
-func newLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *Link) {
+// newLinkFromExistingConn creates a Link using an existing net.Conn
+// i.e. when creating a new onion Link after receiving an incoming connection
+func newLinkFromExistingConn(conn net.Conn) (link *Link) {
+	ip, port, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		log.Printf("Error parsing client remote ip: %v\n", err)
+	}
+
+	portParsed, err := strconv.ParseUint(port, 10, 32)
+	if err != nil {
+		log.Printf("Error parsing client remote port: %v\n", err)
+	}
 	return &Link{
-		address: address,
-		port:    port,
+		address: net.ParseIP(ip),
+		port:    uint16(portParsed),
 		nc:      conn,
 		rd:      bufio.NewReader(conn),
 		dataOut: make(map[uint32]chan message),
@@ -65,10 +79,12 @@ func newLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *
 	}
 }
 
+// isUnused checks whether this Link is used by any tunnels
 func (link *Link) isUnused() (unused bool) {
 	return len(link.dataOut) == 0
 }
 
+// connect initializes a TLS connection to the peer given by Link.address and Link.port
 func (link *Link) connect() (err error) {
 	tlsConfig := tls.Config{
 		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
@@ -88,6 +104,8 @@ func (link *Link) connect() (err error) {
 	return nil
 }
 
+// register registers a message output channel for a tunnel with ID tunnelID with this link
+// after registering incoming messages for this tunnel ID will be queued into dataOut
 func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 	_, ok := link.dataOut[tunnelID]
 	if ok {
@@ -98,12 +116,14 @@ func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 	return nil
 }
 
+// hasTunnel returns true if there is a tunnel with ID tunnelID registered on this Link
 func (link *Link) hasTunnel(tunnelID uint32) (ok bool) {
 	_, ok = link.dataOut[tunnelID]
 
 	return
 }
 
+// removeTunnel unregister the tunnel with ID tunnelID from this Link
 func (link *Link) removeTunnel(tunnelID uint32) {
 	if _, ok := link.dataOut[tunnelID]; ok {
 		close(link.dataOut[tunnelID])
@@ -111,6 +131,7 @@ func (link *Link) removeTunnel(tunnelID uint32) {
 	delete(link.dataOut, tunnelID)
 }
 
+// destroy terminates this Link connection by terminating the goroutine Link handler and closing the underlying net.Conn
 func (link *Link) destroy() (err error) {
 	close(link.Quit)
 	err = link.nc.Close()
@@ -138,6 +159,8 @@ func (link *Link) readMsg() (msg message, err error) {
 	return message{hdr, body}, nil
 }
 
+// sendRelay sends an onion p2p.Message of type p2p.TypeTunnelRelay on this Link.
+// The message body is passed as a packed, raw byte array. Will prepend a correct p2p.Header before the relay message
 func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 	if len(msg) > p2p.MessageSize-p2p.HeaderSize {
 		return p2p.ErrInvalidMessage
@@ -158,12 +181,14 @@ func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 	return err
 }
 
+// sendDestroyTunnel sends a p2p.TunnelDestroy for the given tunnelID on this link
 func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
 	destroyMsg := p2p.TunnelDestroy{}
 	err = link.sendMsg(tunnelID, &destroyMsg)
 	return
 }
 
+// sendMsg sends a p2p.Message for the given tunnelID on this link. Handles packing of p2p.Header and p2p.Message packing.
 func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
 	link.l.Lock()
 	data := link.msgBuf[:]

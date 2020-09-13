@@ -18,14 +18,13 @@ All code handling VoidPhone API protocol messages can be found in the `api` sub-
 Likewise, there is a `p2p` sub-module containing the code for our P2P onion tunnel protocol.
 Both define a general `Message` interface that is implemented for each message type, handling byte packing and unpacking. Implementation of data processing and handling is mainly done by using structs and methods on these structs, similar to the concept of classes in other languages.
 
-The application logic itself is in the main module, grouped into several files:
+The application logic itself is mostly contained in the `onion` sub-module, which implements the data structures (such as `Link`, `Peer`, `Router`) and algorithms handling the p2p onion handshake, connection and routing tracking as well as the tcp/tls-level connections.
 
-`onion.go` contains all logic for our onion protocol, like storing connection and peer data in different structs (`Link`, `Peer`, `Tunnel`).
-If this grows further in complexity, we might also move it into a sub-module.
+Config parsing and option storing is implemented in the sub-module `config` which exposes a struct `Config` containing all configuration parameters.
 
-Config parsing and option storing is implemented in `config.go` which exposes a struct `Config` containing all configuration parameters.
+Communication with the RPS module API is implemented in the sub-module `rps`, exposing a simple interface to fetch one or multiple peers from the RPS API.
 
-Communication with the RPS module API is implemented in `rps.go`, exposing a simple interface to fetch a peer from the RPS API.
+The application logic exposing the onion module API interface is implemented in `api.go` which opens a tcp socket and processes incoming API messages.
 
 The main entry point of our module is `bawang.go`, which will start both the API listen socket and our onion listen socket.
 

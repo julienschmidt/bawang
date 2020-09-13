@@ -18,6 +18,8 @@ import (
 	"bawang/rps"
 )
 
+// Router is the central onion routing logic state tracking struct. It tracks existing Link references, connected API
+// clients with respective api.Connection objects and all currently open outgoing and incoming tunnels.
 type Router struct {
 	cfg *config.Config
 
@@ -34,6 +36,7 @@ type Router struct {
 
 // here are the functions used by the module communicating with the API
 
+// NewRouter creates a new Router using the given config.Config.
 func NewRouter(cfg *config.Config) *Router {
 	return &Router{
 		cfg:             cfg,
@@ -44,10 +47,15 @@ func NewRouter(cfg *config.Config) *Router {
 	}
 }
 
+// RegisterAPIConnection adds an api.Connection to the onion router which will then receive future api.OnionTunnelIncoming
+// solicitations and can instruct the onion module to build new tunnels.
 func (r *Router) RegisterAPIConnection(apiConn *api.Connection) {
 	r.apiConnections = append(r.apiConnections, apiConn)
 }
 
+// BuildTunnel takes care of fully initializing an onion tunnel through the given peers with the tunnels destination
+// being the last peer in hops. The given api.Connection is registered with the created Tunnel and will receive
+// onion traffic for this tunnel.
 func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
 	if len(hops) < 3 {
 		return nil, ErrNotEnoughHops
@@ -201,6 +209,8 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 	return tunnel, nil
 }
 
+// SendData passes application payload through an existing tunnel, either incoming or outgoing taking care of
+// message packing and encryption.
 func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 	relayData := p2p.RelayTunnelData{
 		Data: payload,
@@ -245,6 +255,7 @@ func (r *Router) SendCover(coverSize uint16) (err error) {
 	return
 }
 
+// sendMsgToAPI sends a api.Message to all api.Connection that are registered for the given tunnel ID
 func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 	apiConns, ok := r.tunnels[tunnelID]
 	if !ok {
@@ -267,6 +278,8 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 	return nil
 }
 
+// sendMsgToAllAPI broadcasts an api.Message to all api.Connection which are known to the Router.
+// Useful for announcing incoming onion tunnels.
 func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
 	for _, apiConn := range r.apiConnections {
 		sendError := apiConn.Send(msg)
@@ -285,6 +298,8 @@ func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
 	return nil
 }
 
+// sendDataToAPI is a convenience function to send application data received on a tunnel back to all API connections
+// that are registered for this tunnel.
 func (r *Router) sendDataToAPI(tunnelID uint32, data []byte) (err error) {
 	apiMessage := api.OnionTunnelData{
 		TunnelID: tunnelID,
@@ -296,6 +311,7 @@ func (r *Router) sendDataToAPI(tunnelID uint32, data []byte) (err error) {
 	return err
 }
 
+// RegisterIncomingConnection takes care of tracking the state of an incoming tunnel and announcing it to all API connections.
 func (r *Router) RegisterIncomingConnection(tunnel *tunnelSegment) (err error) {
 	if _, ok := r.tunnels[tunnel.prevHopTunnelID]; !ok {
 		return ErrInvalidTunnel
@@ -312,6 +328,7 @@ func (r *Router) RegisterIncomingConnection(tunnel *tunnelSegment) (err error) {
 	return r.sendMsgToAllAPI(&incomingMsg)
 }
 
+// RemoveAPIConnection unregisters an api.Connection from the router and all existing tunnels.
 func (r *Router) RemoveAPIConnection(apiConn *api.Connection) (err error) {
 	for tunnelID := range r.tunnels {
 		err = r.RemoveAPIConnectionFromTunnel(tunnelID, apiConn)
@@ -327,6 +344,8 @@ func (r *Router) RemoveAPIConnection(apiConn *api.Connection) (err error) {
 	return err
 }
 
+// RemoveAPIConnectionFromTunnel unregisters an api.Connection as a listener on the given tunnel.
+// Will also initiate tunnel teardown if no api.Connection is registered for the tunnel anymore.
 func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) (err error) {
 	if _, ok := r.tunnels[tunnelID]; !ok {
 		return
@@ -350,6 +369,7 @@ func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 	return err
 }
 
+// newTunnelID generates a new, non-existing unique tunnel ID
 func (r *Router) newTunnelID() (tunnelID uint32) {
 	random := mathRand.New(mathRand.NewSource(time.Now().UnixNano())) //nolint:gosec // pseudo-rand is good enough. We just need uniqueness.
 	tunnelID = random.Uint32()
@@ -367,6 +387,7 @@ func (r *Router) newTunnelID() (tunnelID uint32) {
 	return tunnelID
 }
 
+// removeLink removes a Link from the Router state
 func (r *Router) removeLink(link *Link) {
 	for i, ln := range r.links {
 		if ln == link {
@@ -376,6 +397,8 @@ func (r *Router) removeLink(link *Link) {
 	}
 }
 
+// RemoveTunnel completely unregisters a tunnel from the router closing associated links if no tunnel uses them anymore
+// and shutting down all tunnel handler routines.
 func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 	if _, ok := r.tunnels[tunnelID]; !ok {
 		return
@@ -401,6 +424,7 @@ func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 	return err
 }
 
+// CreateLink opens a new Link connection to the give peer and starts the Link handler routine.
 func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error) {
 	link, err = newLink(address, port)
 	if err != nil {
@@ -414,14 +438,18 @@ func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error)
 	return link, nil
 }
 
-func (r *Router) CreateLinkFromExistingConn(address net.IP, port uint16, conn net.Conn) (link *Link, err error) {
-	link = newLinkFromExistingConn(address, port, conn)
+// CreateLinkFromExistingConn adds an existing TLS connection to the Router state and starts the Link handler routine.
+func (r *Router) CreateLinkFromExistingConn(conn net.Conn) (link *Link, err error) {
+	link = newLinkFromExistingConn(conn)
 
 	r.links = append(r.links, link)
+
+	go r.handleLink(link)
 
 	return link, nil
 }
 
+// GetLink checks if a Link exists to the given peer and returns it. If none exists will return nil, false.
 func (r *Router) GetLink(address net.IP, port uint16) (link *Link, ok bool) {
 	for _, link := range r.links {
 		if link.address.Equal(address) && link.port == port {
@@ -432,6 +460,7 @@ func (r *Router) GetLink(address net.IP, port uint16) (link *Link, ok bool) {
 	return nil, false
 }
 
+// GetOrCreateLink returns a Link to the given peer creating a new one if none exists.
 func (r *Router) GetOrCreateLink(address net.IP, port uint16) (link *Link, err error) {
 	link, ok := r.GetLink(address, port)
 	if ok {
@@ -441,6 +470,7 @@ func (r *Router) GetOrCreateLink(address net.IP, port uint16) (link *Link, err e
 	return r.CreateLink(address, port)
 }
 
+// HandleOutgoingTunnel is a goroutine handling all incoming traffic on a Tunnel that was initiated by this peer.
 func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 	// This is the handler go routine for outgoing tunnels that we initiated.
 	// It is assumed that the handshake with the peers is completed and the tunnel is fully initiated at this point!
@@ -519,6 +549,9 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 	}
 }
 
+// handleIncomingTunnelRelayMsg processes an incoming p2p.Message of type p2p.TypeTunnelRelay on an incoming tunnel.
+// Handles p2p.RelayTypeTunnelExtend by extending the current tunnel.
+// Handles p2p.RelayTypeTunnelData by passing the received application payload to all registered API connections.
 func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan message, tunnel *tunnelSegment, msgHdr *p2p.Header, msgData []byte) (err error) {
 	var ok bool
 	var decryptedRelayMsg []byte
@@ -647,6 +680,9 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 	return err
 }
 
+// handleTunnelSegment is a goroutine handling all incoming traffic on an incoming tunnel where this peer is either the
+// last hop in the tunnel or an intermediate hop. Handles tunnel extensions and relay messages that should be passed
+// through the tunnel.
 func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	// This is the handler go routine for incoming tunnels that either are terminated by us or where we are just
 	// an in-between hop. The handshake of the previous hop to us is assumed to be done we can, however, receive
@@ -750,6 +786,8 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	}
 }
 
+// handleLink is the goroutine handler for a Link that reads from the underlying tls.Conn and passes received p2p.Message
+// to the respective tunnel handler via the registered Link.dataOut channel.
 func (r *Router) handleLink(link *Link) {
 	goRoutineErr := make(chan error, 10)
 
