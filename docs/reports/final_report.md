@@ -75,6 +75,12 @@ If a message not adhering to the fixed size scheme is received, the respective s
 
 See [docs/protocol.md](../protocol.md).
 
+### Changes since the Midterm Report
+
+* Added [`TUNNEL RELAY COVER` message](../protocol.md#tunnel-relay-cover), required for cover traffic
+* Added a counter to the [Relay Sub Protocol Header](../protocol.md#relay-sub-protocol-header)
+* Increased the size of `Encrypted Diffie-Hellman Public Key` to   512 byte in [`TUNNEL CREATE`](../protocol.md#tunnel-create) and [`TUNNEL RELAY EXTENDED`](../protocol.md#tunnel-relay-extended) as 4096 bit RSA has a block size of 512 byte (4096 bit)
+
 ## Setup Instructions
 
 See [README.md](../../README.md).
