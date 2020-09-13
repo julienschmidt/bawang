@@ -101,16 +101,18 @@ See [README.md](../../README.md).
 
 ML: Michael Loipführer, JS: Julien Schmidt
 
-- P2P Protocol Design: ML, JS
-- Message Parsing and Packing: mostly JS
+- P2P Protocol Design: ML, JS (jointly)
+- P2P Message Parsing and Packing: mostly JS
 - P2P Handshake Implementation: ML
+- API Message Parsing and Packing: mostly JS
 - API Protocol Logic: mostly ML
-- P2P Round logic: JS
+- Onion Round Logic: JS
+- Onion Relay Implementation: mostly ML
 - CI: JS
-- Documentation: ML, JS
+- Documentation: ML, JS (more)
 
 
 ## Effort Spent
 
 We mainly worked together intensively on the project on three weekends (23./24. May, 06./07. June, 10./11. July) and independently on some additional days before the midterm report.
-As a final implementation sprint we both worked more intensively on the project during the last week before the submission due date, i.e. from the 7. Sep to 13. Sep.
+As a final implementation sprint we both worked more intensively on the project during the last week before the submission due date, i.e. from the 7. Sep to 13. Sep. In total, both team members spent a similar effort.
