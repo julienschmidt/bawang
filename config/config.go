@@ -19,16 +19,17 @@ type Config struct {
 	OnionAPIAddress string
 	TunnelLength    int
 	BuildTimeout    int
-	CreateTimeout   int
 	APITimeout      int
 	Verbosity       int
 	HostKey         *rsa.PrivateKey
 }
 
 var (
-	errMissingHostKey  = errors.New("missing config file entry: [onion] hostkey")
-	errMissingHostname = errors.New("missing config file entry: [onion] p2p_hostname")
-	errMissingPort     = errors.New("missing config file entry: [onion] p2p_port")
+	errMissingHostKey         = errors.New("missing config file entry: [onion] hostkey")
+	errMissingRPSAPIAddress   = errors.New("missing config file entry: [rps] api_address")
+	errMissingOnionAPIAddress = errors.New("missing config file entry: [onion] api_address")
+	errMissingHostname        = errors.New("missing config file entry: [onion] p2p_hostname")
+	errMissingPort            = errors.New("missing config file entry: [onion] p2p_port")
 
 	errInvalidHostKeyPem = errors.New("invalid PEM entry in host key file")
 	errUnknownKeyType    = errors.New("unknown key type")
@@ -45,7 +46,6 @@ func (config *Config) FromFile(path string) error {
 	config.P2PHostname = cfg.Section("onion").Key("p2p_hostname").String()
 	config.P2PPort = cfg.Section("onion").Key("p2p_port").MustInt()
 	config.BuildTimeout = cfg.Section("onion").Key("build_timeout").MustInt(10)
-	config.CreateTimeout = cfg.Section("onion").Key("create_timeout").MustInt(10)
 	config.APITimeout = cfg.Section("onion").Key("api_timeout").MustInt(5)
 	config.Verbosity = cfg.Section("onion").Key("verbose").MustInt(0)
 	config.TunnelLength = cfg.Section("onion").Key("tunnel_length").MustInt(3)
@@ -63,6 +63,14 @@ func (config *Config) FromFile(path string) error {
 	config.HostKey, err = parseHostKey(data)
 	if err != nil {
 		return err
+	}
+
+	if config.RPSAPIAddress == "" {
+		return errMissingRPSAPIAddress
+	}
+
+	if config.OnionAPIAddress == "" {
+		return errMissingOnionAPIAddress
 	}
 
 	if config.P2PHostname == "" {

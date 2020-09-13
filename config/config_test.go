@@ -100,6 +100,36 @@ func TestConfigFromFile(t *testing.T) {
 		require.Equal(t, errInvalidHostKeyPem, err)
 	})
 
+	t.Run("missing RPS api address", func(t *testing.T) {
+		fileName := prepareConfigFile(t, func(data []byte) []byte {
+			// replace hostkey path
+			return bytes.Replace(fixHostKeyPath(data),
+				[]byte("api_address = 127.0.0.1:7102"),
+				[]byte("api_address = "),
+				1)
+		})
+		defer os.Remove(fileName)
+
+		config := Config{}
+		err := config.FromFile(fileName)
+		require.Equal(t, errMissingRPSAPIAddress, err)
+	})
+
+	t.Run("missing onion api address", func(t *testing.T) {
+		fileName := prepareConfigFile(t, func(data []byte) []byte {
+			// replace hostkey path
+			return bytes.Replace(fixHostKeyPath(data),
+				[]byte("api_address = 127.0.0.1:7601"),
+				[]byte("api_address = "),
+				1)
+		})
+		defer os.Remove(fileName)
+
+		config := Config{}
+		err := config.FromFile(fileName)
+		require.Equal(t, errMissingOnionAPIAddress, err)
+	})
+
 	t.Run("missing hostname entry", func(t *testing.T) {
 		fileName := prepareConfigFile(t, func(data []byte) []byte {
 			// replace hostkey path
