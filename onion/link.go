@@ -19,13 +19,13 @@ var (
 	ErrAlreadyRegistered = errors.New("a listener is already registered for this tunnel ID")
 )
 
-// message is a simple internal struct to combine a p2p.Header with the packet payload
+// message is a simple internal struct to combine a p2p.Header with the message body.
 type message struct {
 	hdr  p2p.Header
 	body []byte
 }
 
-// Link abstracts TLS level connections between peers which can be reused by multiple tunnels
+// Link abstracts TLS level connections between peers which can be reused by multiple tunnels.
 type Link struct {
 	address net.IP
 	port    uint16
@@ -40,7 +40,7 @@ type Link struct {
 	Quit    chan struct{}
 }
 
-// newLink opens a new TLS connection to a peer given by address:port and returns a Link tracking that connection
+// newLink opens a new TLS connection to a peer given by address:port and returns a Link tracking that connection.
 func newLink(address net.IP, port uint16) (link *Link, err error) {
 	link = &Link{
 		address: address,
@@ -57,8 +57,8 @@ func newLink(address net.IP, port uint16) (link *Link, err error) {
 	return link, nil
 }
 
-// newLinkFromExistingConn creates a Link using an existing net.Conn
-// i.e. when creating a new onion Link after receiving an incoming connection
+// newLinkFromExistingConn creates a Link using an existing net.Conn,
+// e.g. when creating a new onion Link after receiving an incoming connection.
 func newLinkFromExistingConn(conn net.Conn) (link *Link) {
 	ip, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
@@ -77,11 +77,6 @@ func newLinkFromExistingConn(conn net.Conn) (link *Link) {
 		dataOut: make(map[uint32]chan message),
 		Quit:    make(chan struct{}),
 	}
-}
-
-// isUnused checks whether this Link is used by any tunnels
-func (link *Link) isUnused() (unused bool) {
-	return len(link.dataOut) == 0
 }
 
 // connect initializes a TLS connection to the peer given by Link.address and Link.port
@@ -104,9 +99,17 @@ func (link *Link) connect() (err error) {
 	return nil
 }
 
+// isUnused checks whether this Link is used by any tunnels
+func (link *Link) isUnused() (unused bool) {
+	return len(link.dataOut) == 0
+}
+
 // register registers a message output channel for a tunnel with ID tunnelID with this link
 // after registering incoming messages for this tunnel ID will be queued into dataOut
 func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
+	link.l.Lock()
+	defer link.l.Unlock()
+
 	_, ok := link.dataOut[tunnelID]
 	if ok {
 		return ErrAlreadyRegistered
@@ -118,23 +121,29 @@ func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 
 // hasTunnel returns true if there is a tunnel with ID tunnelID registered on this Link
 func (link *Link) hasTunnel(tunnelID uint32) (ok bool) {
+	link.l.Lock()
 	_, ok = link.dataOut[tunnelID]
+	link.l.Unlock()
 
 	return
 }
 
 // getDataOut returns the dataOut for a given tunnelID, if it exists.
 func (link *Link) getDataOut(tunnelID uint32) (dataOut chan message, ok bool) {
+	link.l.Lock()
 	dataOut, ok = link.dataOut[tunnelID]
+	link.l.Unlock()
 	return
 }
 
 // removeTunnel unregister the tunnel with ID tunnelID from this Link
 func (link *Link) removeTunnel(tunnelID uint32) {
-	if _, ok := link.dataOut[tunnelID]; ok {
-		close(link.dataOut[tunnelID])
+	link.l.Lock()
+	if dataOut, ok := link.dataOut[tunnelID]; ok {
+		close(dataOut)
 	}
 	delete(link.dataOut, tunnelID)
+	link.l.Unlock()
 }
 
 // destroy terminates this Link connection by closing all data channels and closing the underlying net.Conn
@@ -153,6 +162,9 @@ func (link *Link) Close() {
 
 // readMsg reads a message from the underlying network connection and returns its type and message body.
 func (link *Link) readMsg() (msg message, err error) {
+	link.l.Lock()
+	defer link.l.Unlock()
+
 	// read the message header
 	var hdr p2p.Header
 	if err = hdr.Read(link.rd); err != nil {
