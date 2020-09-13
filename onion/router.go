@@ -121,7 +121,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 			HostKey:  hops[0].HostKey,
 		}}
 
-	case <-time.After(time.Duration(r.cfg.CreateTimeout) * time.Second):
+	case <-time.After(time.Duration(r.cfg.BuildTimeout) * time.Second):
 		return nil, ErrTimedOut
 	}
 
@@ -191,7 +191,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 			})
 
 			break
-		case <-time.After(time.Duration(r.cfg.CreateTimeout) * time.Second):
+		case <-time.After(time.Duration(r.cfg.BuildTimeout) * time.Second):
 			return nil, ErrTimedOut
 		}
 	}
@@ -677,7 +677,7 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 								return
 							}
 
-						case <-time.After(time.Duration(r.cfg.CreateTimeout) * time.Second): // timeout
+						case <-time.After(time.Duration(r.cfg.BuildTimeout) * time.Second): // timeout
 							errOut <- ErrTimedOut
 							return
 						}

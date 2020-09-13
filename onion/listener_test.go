@@ -22,7 +22,6 @@ func TestListenOnionSocket(t *testing.T) {
 		RPSAPIAddress:   "127.0.0.1:14001",
 		OnionAPIAddress: "127.0.0.1:14000",
 		BuildTimeout:    5,
-		CreateTimeout:   5,
 		APITimeout:      5,
 		Verbosity:       2,
 	}
