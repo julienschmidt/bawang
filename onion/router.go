@@ -74,6 +74,7 @@ func newRouterWithRPS(cfg *config.Config, rps rps.RPS) *Router {
 	}
 }
 
+// HandleRounds implements the round logic, (re-)building tunnels at the beginning of each round.
 func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 	roundTimer := time.NewTicker(time.Duration(r.cfg.RoundDuration) * time.Second)
 	defer roundTimer.Stop()
@@ -170,6 +171,7 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (rep
 	return replyChan
 }
 
+// handleBuildTunnelJobs handles all queued buildTunnelJobs, which is used to build tunnels at the beginning of each round.
 func (r *Router) handleBuildTunnelJobs() (successfulBuilds int) {
 	r.buildQueueLock.Lock()
 	if len(r.buildQueue) > 0 {
@@ -231,6 +233,7 @@ func (r *Router) rebuildTunnel(tunnel *Tunnel) (err error) {
 	return nil
 }
 
+// buildCoverTunnel builds a tunnel used for cover traffic.
 func (r *Router) buildCoverTunnel() error {
 	targetPeer, err := r.rps.GetPeer()
 	if err != nil {
@@ -448,6 +451,7 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 	return ErrInvalidTunnel
 }
 
+// SendCover sends cover traffic over the cover tunnel, if one exists.
 func (r *Router) SendCover(coverSize uint16) (err error) {
 	// first we check if there is a manually created tunnel, i.e. a tunnel on which api connections are listening
 	r.tunnelsLock.Lock()
