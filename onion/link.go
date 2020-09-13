@@ -33,12 +33,13 @@ type Link struct {
 	nc net.Conn
 	rd *bufio.Reader
 
-	l      sync.Mutex // guards fields below
-	msgBuf [p2p.MessageSize]byte
+	msgLock sync.Mutex
+	msgBuf  [p2p.MessageSize]byte
 
 	// data channels for communication with other goroutines
-	dataOut map[uint32]chan message // output data channels for received messages with corresponding tunnel IDs
-	Quit    chan struct{}
+	dataLock sync.Mutex
+	dataOut  map[uint32]chan message // output data channels for received messages with corresponding tunnel IDs
+	Quit     chan struct{}
 }
 
 // newLink opens a new TLS connection to a peer given by address:port and returns a Link tracking that connection.
@@ -100,14 +101,17 @@ func (link *Link) connect() (err error) {
 
 // isUnused checks whether this Link is used by any tunnels
 func (link *Link) isUnused() (unused bool) {
+	link.dataLock.Lock()
+	defer link.dataLock.Unlock()
+
 	return len(link.dataOut) == 0
 }
 
 // register registers a message output channel for a tunnel with ID tunnelID with this link
 // after registering incoming messages for this tunnel ID will be queued into dataOut
 func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
-	link.l.Lock()
-	defer link.l.Unlock()
+	link.dataLock.Lock()
+	defer link.dataLock.Unlock()
 
 	_, ok := link.dataOut[tunnelID]
 	if ok {
@@ -120,37 +124,39 @@ func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
 
 // hasTunnel returns true if there is a tunnel with ID tunnelID registered on this Link
 func (link *Link) hasTunnel(tunnelID uint32) (ok bool) {
-	link.l.Lock()
+	link.dataLock.Lock()
 	_, ok = link.dataOut[tunnelID]
-	link.l.Unlock()
+	link.dataLock.Unlock()
 
 	return
 }
 
 // getDataOut returns the dataOut for a given tunnelID, if it exists.
 func (link *Link) getDataOut(tunnelID uint32) (dataOut chan message, ok bool) {
-	link.l.Lock()
+	link.dataLock.Lock()
 	dataOut, ok = link.dataOut[tunnelID]
-	link.l.Unlock()
+	link.dataLock.Unlock()
 	return
 }
 
 // removeTunnel unregister the tunnel with ID tunnelID from this Link
 func (link *Link) removeTunnel(tunnelID uint32) {
-	link.l.Lock()
+	link.dataLock.Lock()
 	if dataOut, ok := link.dataOut[tunnelID]; ok {
 		close(dataOut)
 	}
 	delete(link.dataOut, tunnelID)
-	link.l.Unlock()
+	link.dataLock.Unlock()
 }
 
 // destroy terminates this Link connection by closing all data channels and closing the underlying net.Conn
 func (link *Link) destroy() (err error) {
+	link.dataLock.Lock()
 	for _, dataChan := range link.dataOut {
 		close(dataChan)
 	}
 	err = link.nc.Close()
+	link.dataLock.Unlock()
 	return
 }
 
@@ -168,8 +174,8 @@ func (link *Link) readMsg() (msg message, err error) {
 	}
 
 	// ready message body
-	link.l.Lock()
-	defer link.l.Unlock()
+	link.msgLock.Lock()
+	defer link.msgLock.Unlock()
 	body := link.msgBuf[:p2p.MaxBodySize]
 	_, err = io.ReadFull(link.rd, body)
 	if err != nil {
@@ -194,14 +200,14 @@ func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 		Type:     p2p.TypeTunnelRelay,
 	}
 
-	link.l.Lock()
+	link.msgLock.Lock()
 
 	data := link.msgBuf[:]
 	header.Pack(data[:p2p.HeaderSize])
 	copy(data[p2p.HeaderSize:], msg)
 
 	_, err = link.nc.Write(data)
-	link.l.Unlock()
+	link.msgLock.Unlock()
 
 	return err
 }
@@ -215,8 +221,8 @@ func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
 
 // sendMsg sends a p2p.Message for the given tunnelID on this link. Handles packing of p2p.Header and p2p.Message packing.
 func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
-	link.l.Lock()
-	defer link.l.Unlock()
+	link.msgLock.Lock()
+	defer link.msgLock.Unlock()
 
 	data := link.msgBuf[:]
 	n, err := p2p.PackMessage(data, tunnelID, msg)
