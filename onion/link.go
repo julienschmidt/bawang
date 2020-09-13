@@ -73,13 +73,16 @@ func (link *Link) connect() (err error) {
 		InsecureSkipVerify: true, //nolint:gosec // peers do use self-signed certs
 	}
 
-	link.nc, err = tls.Dial("tcp", link.address.String()+":"+strconv.Itoa(int(link.port)), &tlsConfig)
+	nc, err := tls.Dial("tcp", link.address.String()+":"+strconv.Itoa(int(link.port)), &tlsConfig)
 	if err != nil {
 		log.Printf("Error opening tls connection to peer: %v", err)
 		return
 	}
 
-	link.rd = bufio.NewReader(link.nc)
+	link.l.Lock()
+	link.nc = nc
+	link.rd = bufio.NewReader(nc)
+	link.l.Unlock()
 
 	return nil
 }
@@ -118,6 +121,7 @@ func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 		return p2p.ErrInvalidMessage
 	}
 
+	link.l.Lock()
 	data := link.msgBuf[:]
 	header := p2p.Header{
 		TunnelID: tunnelID,
@@ -126,9 +130,9 @@ func (link *Link) sendRelay(tunnelID uint32, msg []byte) (err error) {
 	header.Pack(data[:p2p.HeaderSize])
 	copy(data[p2p.HeaderSize:len(msg)+p2p.HeaderSize], msg)
 
-	link.l.Lock()
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
+
 	return err
 }
 
@@ -139,6 +143,7 @@ func (link *Link) sendDestroyTunnel(tunnelID uint32) (err error) {
 }
 
 func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
+	link.l.Lock()
 	data := link.msgBuf[:]
 	n, err := p2p.PackMessage(data, tunnelID, msg)
 	if err != nil {
@@ -146,7 +151,6 @@ func (link *Link) sendMsg(tunnelID uint32, msg p2p.Message) (err error) {
 	}
 
 	data = data[:n]
-	link.l.Lock()
 	_, err = link.nc.Write(data)
 	link.l.Unlock()
 	return err
