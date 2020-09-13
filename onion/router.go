@@ -4,6 +4,7 @@ package onion
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"io"
 	"log"
 	mathRand "math/rand"
@@ -18,33 +19,41 @@ import (
 	"bawang/rps"
 )
 
-// Router is the central onion routing logic state tracking struct. It tracks existing Link references, connected API
-// clients with respective api.Connection objects and all currently open outgoing and incoming tunnels.
+// Router is the central onion routing logic state tracking struct.
+// It tracks existing Link references, connected API clients with respective api.Connection objects
+// and all currently open outgoing and incoming tunnels.
 type Router struct {
 	cfg *config.Config
+	rps rps.RPS
 
 	links []*Link
 
-	// maps which api connections listen on which tunnels in addition to keeping track of existing tunnels
+	// maps which API connections listen on which tunnels in addition to keeping track of existing tunnels
 	tunnels map[uint32][]*api.Connection
 
 	outgoingTunnels map[uint32]*Tunnel
 	incomingTunnels map[uint32]*tunnelSegment
 
+	// keeps track of known API connections, which will then receive future api.OnionTunnelIncoming solicitations
+	// and can instruct the onion module to build new tunnels
 	apiConnections []*api.Connection
 }
 
-// here are the functions used by the module communicating with the API
-
 // NewRouter creates a new Router using the given config.Config.
-func NewRouter(cfg *config.Config) *Router {
+func NewRouter(cfg *config.Config) (*Router, error) {
+	rps, err := rps.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing RPS: %w", err)
+	}
+
 	return &Router{
 		cfg:             cfg,
+		rps:             rps,
 		tunnels:         make(map[uint32][]*api.Connection),
 		outgoingTunnels: make(map[uint32]*Tunnel),
 		incomingTunnels: make(map[uint32]*tunnelSegment),
 		apiConnections:  []*api.Connection{},
-	}
+	}, nil
 }
 
 // RegisterAPIConnection adds an api.Connection to the onion router which will then receive future api.OnionTunnelIncoming
@@ -56,11 +65,22 @@ func (r *Router) RegisterAPIConnection(apiConn *api.Connection) {
 // BuildTunnel takes care of fully initializing an onion tunnel through the given peers with the tunnels destination
 // being the last peer in hops. The given api.Connection is registered with the created Tunnel and will receive
 // onion traffic for this tunnel.
-func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
-	if len(hops) < 3 {
+func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
+	if r.cfg.TunnelLength < 3 {
 		return nil, ErrNotEnoughHops
 	}
 
+	// sample intermediate peers
+	hops, err := r.rps.SampleIntermediatePeers(r.cfg.TunnelLength, targetPeer)
+	if err != nil {
+		return nil, fmt.Errorf("error sampling peers: %w", err)
+	}
+
+	return r.buildTunnelWithHops(hops, apiConn)
+}
+
+// buildTunnelWithHops takes care of actually initializing an onion tunnel with the chosen hops.
+func (r *Router) buildTunnelWithHops(hops []*rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
 	msgBuf := make([]byte, p2p.MessageSize)
 
 	// generate a new, unique tunnel ID
@@ -97,7 +117,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 		return nil, err
 	}
 
-	// now we wait for the response, timeouting when one does not come
+	// now we wait for the response, timing out when one does not come
 	select {
 	case created := <-dataOut:
 		if created.hdr.Type != p2p.TypeTunnelCreated {
@@ -205,7 +225,7 @@ func (r *Router) BuildTunnel(hops []*rps.Peer, apiConn *api.Connection) (tunnel 
 
 	r.tunnels[tunnel.id] = append(r.tunnels[tunnel.id], apiConn)
 	r.outgoingTunnels[tunnel.id] = tunnel
-	go r.HandleOutgoingTunnel(tunnel, dataOut)
+
 	return tunnel, nil
 }
 
@@ -471,16 +491,22 @@ func (r *Router) GetOrCreateLink(address net.IP, port uint16) (link *Link, err e
 	return r.CreateLink(address, port)
 }
 
-// HandleOutgoingTunnel is a goroutine handling all incoming traffic on a Tunnel that was initiated by this peer.
-func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
+// HandleOutgoingTunnel is a goroutine handling all traffic for a Tunnel that was initiated by this peer.
+func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel) {
 	// This is the handler go routine for outgoing tunnels that we initiated.
 	// It is assumed that the handshake with the peers is completed and the tunnel is fully initiated at this point!
 	defer func() {
 		err := r.RemoveTunnel(tunnel.id)
 		if err != nil {
-			log.Printf("Error removing tunnel from link with ID %v: %v\n", tunnel.ID(), err)
+			log.Printf("Error removing tunnel from link with ID %v: %v\n", tunnel.id, err)
 		}
 	}()
+
+	dataOut, ok := tunnel.link.getDataOut(tunnel.id)
+	if !ok {
+		log.Printf("failed to get data channel for outgoing tunnel %v\n", tunnel.id)
+		return
+	}
 
 	for {
 		select {
@@ -494,7 +520,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 			case p2p.TypeTunnelRelay:
 				relayHdr, decryptedRelayMsg, ok, err := tunnel.DecryptRelayMessage(msg.body)
 				if err != nil {
-					log.Printf("error decrypting relay message on outgoing tunnel %v\n", tunnel.ID())
+					log.Printf("error decrypting relay message on outgoing tunnel %v\n", tunnel.id)
 					return
 				}
 
@@ -512,24 +538,24 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 						dataMsg := p2p.RelayTunnelData{}
 						err = dataMsg.Parse(decryptedRelayMsg)
 						if err != nil {
-							log.Printf("error parsing relay data message on outgoing tunnel %v\n", tunnel.ID())
+							log.Printf("error parsing relay data message on outgoing tunnel %v\n", tunnel.id)
 							return
 						}
 
 						err = r.sendDataToAPI(hdr.TunnelID, dataMsg.Data)
 						if err != nil {
-							log.Printf("error sending incoming data to API for outgoing tunnel %v\n", tunnel.ID())
+							log.Printf("error sending incoming data to API for outgoing tunnel %v\n", tunnel.id)
 							return
 						}
 
 					default:
-						log.Printf("received invalid subtype of relay message on outgoing tunnel %v\n", tunnel.ID())
+						log.Printf("received invalid subtype of relay message on outgoing tunnel %v\n", tunnel.id)
 						return
 					}
 				} else {
 					// we received a non-decryptable relay message, tear down the tunnel
-					log.Printf("received un-decryptable relay message on outgoing tunnel %v\n", tunnel.ID())
-					_ = tunnel.link.sendDestroyTunnel(tunnel.ID())
+					log.Printf("received un-decryptable relay message on outgoing tunnel %v\n", tunnel.id)
+					_ = tunnel.link.sendDestroyTunnel(tunnel.id)
 					// in case of an error here we cannot really do much apart from tearing down the tunnel anyway
 					return
 				}
@@ -546,7 +572,7 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 				return
 
 			default: // since we assume the circuit to be fully built we cannot accept any other message
-				log.Printf("received invalid message on outgoing tunnel %v\n", tunnel.ID())
+				log.Printf("received invalid message on outgoing tunnel %v\n", tunnel.id)
 				return
 			}
 

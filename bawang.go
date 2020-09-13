@@ -10,7 +10,6 @@ import (
 
 	"bawang/config"
 	"bawang/onion"
-	"bawang/rps"
 )
 
 func main() {
@@ -34,12 +33,10 @@ func main() {
 		close(quitChan)
 	}()
 
-	// initialize modules
-	router := onion.NewRouter(&cfg)
-	rps, err := rps.New(&cfg)
+	// initialize Onion router
+	router, err := onion.NewRouter(&cfg)
 	if err != nil {
-		close(quitChan)
-		log.Fatalf("Error initializing RPS: %v", err)
+		log.Fatalf("Error initializing Onion router: %v", err)
 	}
 
 	// start listening on sockets in child goroutines
@@ -47,7 +44,7 @@ func main() {
 	go onion.ListenOnionSocket(&cfg, router, errChanOnion, quitChan)
 
 	errChanAPI := make(chan error)
-	go ListenAPISocket(&cfg, router, rps, errChanAPI, quitChan)
+	go ListenAPISocket(&cfg, router, errChanAPI, quitChan)
 
 	// handle errors from child goroutines
 	select {

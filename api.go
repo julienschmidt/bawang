@@ -16,7 +16,7 @@ type Peer = rps.Peer
 
 // HandleAPIConnection initializes a given net.Conn as an API Connection and accepts API messages,
 // dispatching to the respective logic.
-func HandleAPIConnection(cfg *config.Config, nc net.Conn, rps rps.RPS, router *onion.Router) {
+func HandleAPIConnection(nc net.Conn, router *onion.Router) {
 	// init net.Conn as an api.Connection and register it with the onion router
 	conn := api.NewConnection(nc)
 	router.RegisterAPIConnection(conn)
@@ -61,25 +61,24 @@ func HandleAPIConnection(cfg *config.Config, nc net.Conn, rps rps.RPS, router *o
 				HostKey: targetKey,
 			}
 
-			// sample intermediate peers
-			var peers []*Peer
-			peers, err = rps.SampleIntermediatePeers(cfg.TunnelLength, targetPeer)
-			if err != nil {
-				log.Printf("Error getting random peer: %v\n", err)
-				err = conn.SendError(0, api.TypeOnionTunnelBuild)
-				if err != nil {
-					log.Printf("Error sending error: %v\n", err)
-					return
-				}
-			}
-
 			// instruct onion router to build tunnel with given peers
 			var tunnel *onion.Tunnel
-			tunnel, err = router.BuildTunnel(peers, conn)
+			tunnel, err = router.BuildTunnel(targetPeer, conn)
 			if err != nil {
 				log.Printf("Error building tunnel: %v\n", err)
+				var tunnelID uint32 = 0
+				if tunnel != nil {
+					tunnelID = tunnel.ID()
+				}
+				err = conn.SendError(tunnelID, api.TypeOnionTunnelBuild)
+				if err != nil {
+					log.Printf("Error sending error: %v\n", err)
+				}
 				return
 			}
+
+			// start handling messages for this tunnel
+			go router.HandleOutgoingTunnel(tunnel)
 
 			// send confirmation
 			err = conn.Send(&api.OnionTunnelReady{
@@ -131,7 +130,7 @@ func HandleAPIConnection(cfg *config.Config, nc net.Conn, rps rps.RPS, router *o
 
 // ListenAPISocket opens the API endpoint socket and accepts incoming connections,
 // which are handled concurrently in goroutines.
-func ListenAPISocket(cfg *config.Config, router *onion.Router, rps rps.RPS, errOut chan error, quit chan struct{}) {
+func ListenAPISocket(cfg *config.Config, router *onion.Router, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
 		errOut <- err
@@ -155,6 +154,6 @@ func ListenAPISocket(cfg *config.Config, router *onion.Router, rps rps.RPS, errO
 		log.Println("Received new connection")
 
 		// handle connections concurrently in goroutines
-		go HandleAPIConnection(cfg, conn, rps, router)
+		go HandleAPIConnection(conn, router)
 	}
 }

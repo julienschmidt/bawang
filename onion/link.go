@@ -123,6 +123,12 @@ func (link *Link) hasTunnel(tunnelID uint32) (ok bool) {
 	return
 }
 
+// getDataOut returns the dataOut for a given tunnelID, if it exists.
+func (link *Link) getDataOut(tunnelID uint32) (dataOut chan message, ok bool) {
+	dataOut, ok = link.dataOut[tunnelID]
+	return
+}
+
 // removeTunnel unregister the tunnel with ID tunnelID from this Link
 func (link *Link) removeTunnel(tunnelID uint32) {
 	if _, ok := link.dataOut[tunnelID]; ok {

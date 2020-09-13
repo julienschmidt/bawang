@@ -29,7 +29,8 @@ func TestListenOnionSocket(t *testing.T) {
 	hostKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.Nil(t, err)
 	cfg.HostKey = hostKey
-	router := NewRouter(&cfg)
+	router, err := NewRouter(&cfg)
+	require.Nil(t, err)
 
 	errChan := make(chan error)
 	quitChan := make(chan struct{})

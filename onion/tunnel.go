@@ -92,7 +92,7 @@ type tunnelSegment struct {
 	quit chan struct{}
 }
 
-// Close terminates a tunnelSegment sending p2p.TypeTunnelDestroy messages to the previous and next hop.
+// Close terminates a tunnelSegment by sending p2p.TypeTunnelDestroy messages to the previous and next hop.
 func (tunnel *tunnelSegment) Close() (err error) {
 	close(tunnel.quit)
 	err = tunnel.prevHopLink.sendDestroyTunnel(tunnel.prevHopTunnelID)
