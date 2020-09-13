@@ -359,3 +359,31 @@ func TestRelayTunnelData(t *testing.T) {
 	require.Equal(t, len(data), n)
 	assert.Equal(t, data, buf[:n])
 }
+
+func TestRelayTunnelCover(t *testing.T) {
+	msg := new(RelayTunnelCover)
+
+	// check message type
+	require.Equal(t, RelayTypeTunnelCover, msg.Type())
+
+	data := make([]byte, 1)
+	data[0] = 0x01
+	msg.Ping = true
+
+	// too small buf for packing
+	_, packErr := msg.Pack([]byte{})
+	assert.Equal(t, ErrBufferTooSmall, packErr)
+
+	err := msg.Parse([]byte{0x01})
+	require.Nil(t, err)
+	require.Equal(t, RelayTunnelCover{
+		Ping: true,
+	}, *msg)
+
+	buf := make([]byte, 4096)
+	n, err := msg.Pack(buf)
+	require.Nil(t, err)
+	require.Equal(t, len(data), n)
+	assert.Equal(t, data, buf[:n])
+	assert.Equal(t, len(data), msg.PackedSize())
+}
