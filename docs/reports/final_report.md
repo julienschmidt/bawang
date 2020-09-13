@@ -81,6 +81,7 @@ See [docs/protocol.md](../protocol.md).
 * Added a counter to the [Relay Sub Protocol Header](../protocol.md#relay-sub-protocol-header), required for secure encryption but also used for replay protection
 * Increased the size of `Encrypted Diffie-Hellman Public Key` to   512 byte in [`TUNNEL CREATE`](../protocol.md#tunnel-create) and [`TUNNEL RELAY EXTENDED`](../protocol.md#tunnel-relay-extended) as 4096 bit RSA has a block size of 512 byte (4096 bit). Consequently, the size of P2P messages had to be increased from 512 byte to 1024 byte to fit the larger message types.
 
+
 ## Setup Instructions
 
 See [README.md](../../README.md).
@@ -88,9 +89,7 @@ See [README.md](../../README.md).
 
 ## Future Work
 
-- Finish final implementation of our onion protocol
-- Integrate onion protocol functions with the API layer
-- Fully integrate the `voidphone_testing` library into our continuous integration testing
+- Fully integrate the `voidphone_testing` library into our continuous integration testing. We found `voidphone_testing` to be horrible documented and hard / unintuitive to use. We eventually came to the conclusion, that it was not worth the effort to get it running.
 - Potentially different underlying network protocols (QUIC / unreliable UDP in addition to TCP)
 
 
