@@ -1,7 +1,6 @@
 package onion
 
 import (
-	"bawang/p2p"
 	"bufio"
 	"crypto/rsa"
 	"errors"
@@ -14,6 +13,7 @@ import (
 
 	"bawang/api"
 	"bawang/config"
+	"bawang/p2p"
 	"bawang/rps"
 )
 
@@ -193,7 +193,7 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	router4.removeUnusedTunnels()
 
 	// empty the pipe buffer of api conn 1 otherwise writes will block since pipes are not buffered
-	_, _ = rd.Read(apiBuf) // here
+	_, _ = rd.Read(apiBuf)
 
 	// wait for traffic to propagate
 	time.Sleep(2 * time.Second)
@@ -213,7 +213,7 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	close(quitChan)
 }
 
-func TestRouter_HandleRounds(t *testing.T) {
+func TestRouterHandleRounds(t *testing.T) {
 	// load config files
 	cfgPeer1 := config.Config{}
 	err := cfgPeer1.FromFile("../.testing/bootstrap.conf")
@@ -272,6 +272,6 @@ func TestRouter_HandleRounds(t *testing.T) {
 	assert.Equal(t, 1, len(router1.outgoingTunnels))
 	assert.Equal(t, 1, len(router1.tunnels))
 
-	err = router1.SendCover(2 * p2p.MessageSize + 1)
+	err = router1.SendCover(2*p2p.MessageSize + 1)
 	assert.Nil(t, err)
 }
