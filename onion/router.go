@@ -90,24 +90,7 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 			return
 		case <-roundTimer.C:
 			// build requested new tunnels
-			successfulBuilds := 0
-			r.buildQueueLock.Lock()
-			if len(r.buildQueue) > 0 {
-				for _, buildJob := range r.buildQueue {
-					var tunnel *Tunnel
-					tunnel, err = r.buildNewTunnel(buildJob.targetPeer, buildJob.apiConn)
-					buildJob.replyChan <- BuildTunnelReply{
-						Tunnel: tunnel,
-						Err:    err,
-					}
-
-					if err == nil {
-						successfulBuilds++
-					}
-				}
-				r.buildQueue = nil
-			}
-			r.buildQueueLock.Unlock()
+			successfulBuilds := r.handleBuildTunnelJobs()
 
 			// if we have an actual tunnel now, but did not before, we can close the cover tunnel now.
 			if successfulBuilds > 0 {
@@ -129,7 +112,7 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 					err = r.rebuildTunnel(tunnel)
 					if err != nil {
 						errOut <- fmt.Errorf("error rebuilding tunnel: %w", err)
-						// r.tunnelsLock.Unlock()
+						r.tunnelsLock.Unlock()
 						return
 					}
 				}
@@ -138,6 +121,7 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 				err := r.buildCoverTunnel()
 				if err != nil {
 					errOut <- fmt.Errorf("error building cover tunnel: %w", err)
+					r.tunnelsLock.Unlock()
 					return
 				}
 			}
@@ -184,6 +168,28 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (rep
 	r.buildQueueLock.Unlock()
 
 	return replyChan
+}
+
+func (r *Router) handleBuildTunnelJobs() (successfulBuilds int) {
+	r.buildQueueLock.Lock()
+	if len(r.buildQueue) > 0 {
+		for _, buildJob := range r.buildQueue {
+			var tunnel *Tunnel
+			tunnel, err := r.buildNewTunnel(buildJob.targetPeer, buildJob.apiConn)
+			buildJob.replyChan <- BuildTunnelReply{
+				Tunnel: tunnel,
+				Err:    err,
+			}
+
+			if err == nil {
+				successfulBuilds++
+			}
+		}
+		r.buildQueue = nil
+	}
+	r.buildQueueLock.Unlock()
+
+	return successfulBuilds
 }
 
 // buildNewTunnel is used to build a new tunnel with new random intermediate peers.

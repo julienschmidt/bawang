@@ -115,8 +115,16 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	go ListenOnionSocket(&cfgPeer4, router4, errChanOnion4, quitChan)
 
 	time.Sleep(1 * time.Second) // annoyingly wait for the sockets to fully start
-	tunnel, err := router1.buildNewTunnel(&targetPeer, apiConn1)
-	require.Nil(t, err)
+	replyChan := router1.BuildTunnel(&targetPeer, apiConn1)
+
+	go func() {
+		successfulBuilds := router1.handleBuildTunnelJobs()
+		require.Equal(t, 1, successfulBuilds)
+	}()
+
+	reply := <-replyChan
+	require.Nil(t, reply.Err)
+	tunnel := reply.Tunnel
 	require.NotNil(t, tunnel)
 
 	assert.Equal(t, len(intermediateHops)+1, len(tunnel.hops))
