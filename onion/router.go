@@ -10,6 +10,7 @@ import (
 	"log"
 	mathRand "math/rand"
 	"net"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/nacl/box"
@@ -31,21 +32,28 @@ type Router struct {
 	cfg *config.Config
 	rps rps.RPS
 
-	links []*Link
+	linksLock sync.Mutex
+	links     []*Link
 
+	tunnelsLock sync.Mutex // guards tunnels, outgoingTunnels and incomingTunnels
 	// maps which API connections listen on which tunnels in addition to keeping track of existing tunnels
-	tunnels map[uint32][]*api.Connection
-
+	tunnels         map[uint32][]*api.Connection
 	outgoingTunnels map[uint32]*Tunnel
 	incomingTunnels map[uint32]*tunnelSegment
 
-	buildQueue []*buildTunnelJob
-	// TODO: destroyQueue []*destroyTunnelJob
+	buildQueueLock sync.Mutex
+	buildQueue     []*buildTunnelJob
+
+	// TODO:
+	destroyQueueLock sync.Mutex
+	destroyQueue     []*buildTunnelJob
+
 	coverTunnel *Tunnel
 
 	// keeps track of known API connections, which will then receive future api.OnionTunnelIncoming solicitations
 	// and can instruct the onion module to build new tunnels
-	apiConnections []*api.Connection
+	apiConnectionsLock sync.Mutex
+	apiConnections     []*api.Connection
 }
 
 // NewRouter creates a new Router using the given config.Config.
@@ -84,8 +92,9 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 		case <-quit:
 			return
 		case <-roundTimer.C:
+			successfulBuilds := 0
+			r.buildQueueLock.Lock()
 			if len(r.buildQueue) > 0 {
-				successfulBuilds := 0
 				for _, buildJob := range r.buildQueue {
 					var tunnel *Tunnel
 					tunnel, err = r.buildNewTunnel(buildJob.targetPeer, buildJob.apiConn)
@@ -98,26 +107,34 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 						successfulBuilds++
 					}
 				}
+				r.buildQueue = nil
+			}
+			r.buildQueueLock.Unlock()
 
-				// if we have an actual tunnel now, but did not before, we can close the cover tunnel now.
-				if successfulBuilds > 0 && r.coverTunnel != nil {
+			// if we have an actual tunnel now, but did not before, we can close the cover tunnel now.
+			if successfulBuilds > 0 {
+				if r.coverTunnel != nil {
 					err = r.coverTunnel.Close()
 					if err != nil {
 						errOut <- fmt.Errorf("error closing cover tunnel: %w", err)
 						return
 					}
+					r.coverTunnel = nil
 				}
 			}
 
 			// TODO: handle destroy queue
 
+			r.tunnelsLock.Lock()
 			for _, tunnel := range r.outgoingTunnels {
 				err = r.rebuildTunnel(tunnel)
 				if err != nil {
 					errOut <- fmt.Errorf("error rebuilding tunnel: %w", err)
+					// r.tunnelsLock.Unlock()
 					return
 				}
 			}
+			r.tunnelsLock.Unlock()
 		}
 	}
 }
@@ -125,7 +142,9 @@ func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
 // RegisterAPIConnection adds an api.Connection to the onion router which will then receive future api.OnionTunnelIncoming
 // solicitations and can instruct the onion module to build new tunnels.
 func (r *Router) RegisterAPIConnection(apiConn *api.Connection) {
+	r.apiConnectionsLock.Lock()
 	r.apiConnections = append(r.apiConnections, apiConn)
+	r.apiConnectionsLock.Unlock()
 }
 
 type buildTunnelJob struct {
@@ -153,7 +172,9 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (rep
 		replyChan:  replyChan,
 	}
 
+	r.buildQueueLock.Lock()
 	r.buildQueue = append(r.buildQueue, &buildJob)
+	r.buildQueueLock.Unlock()
 
 	return replyChan
 }
@@ -162,6 +183,9 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (rep
 func (r *Router) buildNewTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
 	// generate a new, unique tunnel ID
 	tunnelID := r.newTunnelID()
+
+	r.tunnelsLock.Lock()
+	defer r.tunnelsLock.Unlock()
 
 	// actually build the tunnel
 	tunnel, err = r.buildTunnel(targetPeer, tunnelID, false)
@@ -182,7 +206,9 @@ func (r *Router) rebuildTunnel(tunnel *Tunnel) (err error) {
 
 	targetPeer := tunnel.hops[len(tunnel.hops)-1]
 
+	r.tunnelsLock.Lock()
 	_, err = r.buildTunnel(targetPeer, tunnel.id, false)
+	r.tunnelsLock.Unlock()
 	if err != nil {
 		return err
 	}
@@ -206,6 +232,7 @@ func (r *Router) buildCoverTunnel() error {
 }
 
 // buildTunnel is shared by Router.buildNewTunnel and Router.rebuildTunnel to actually perform the tunnel building.
+// Must be called with r.tunnelsLock hold.
 func (r *Router) buildTunnel(targetPeer *rps.Peer, tunnelID uint32, renewing bool) (tunnel *Tunnel, err error) {
 	if r.cfg.TunnelLength < 3 {
 		return nil, ErrNotEnoughHops
@@ -367,7 +394,11 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 	}
 
 	buf := make([]byte, p2p.RelayMessageSize)
+
+	r.tunnelsLock.Lock()
 	if tunnel, ok := r.outgoingTunnels[tunnelID]; ok {
+		r.tunnelsLock.Unlock()
+
 		var n int
 		tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &relayData)
 		if err != nil {
@@ -382,6 +413,8 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 
 		return tunnel.link.sendRelay(tunnelID, encryptedMsg)
 	} else if tunnelSegment, ok := r.incomingTunnels[tunnelID]; ok {
+		r.tunnelsLock.Unlock()
+
 		var n int
 		tunnelSegment.counter, n, err = p2p.PackRelayMessage(buf, tunnelSegment.counter, &relayData)
 		if err != nil {
@@ -395,6 +428,8 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 		}
 
 		return tunnelSegment.prevHopLink.sendRelay(tunnelID, encryptedMsg)
+	} else {
+		r.tunnelsLock.Unlock()
 	}
 
 	return ErrInvalidTunnel
@@ -402,8 +437,10 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 
 func (r *Router) SendCover(coverSize uint16) (err error) {
 	// first we check if there is a manually created tunnel, i.e. a tunnel on which api connections are listening
+	r.tunnelsLock.Lock()
 	for _, tunnel := range r.outgoingTunnels {
 		if apiConns, ok := r.tunnels[tunnel.ID()]; ok && len(apiConns) != 0 {
+			r.tunnelsLock.Unlock()
 			return ErrSendCoverNotAllowed
 		}
 	}
@@ -444,7 +481,9 @@ func (r *Router) SendCover(coverSize uint16) (err error) {
 
 // sendMsgToAPI sends a api.Message to all api.Connection that are registered for the given tunnel ID
 func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
+	r.tunnelsLock.Lock()
 	apiConns, ok := r.tunnels[tunnelID]
+	r.tunnelsLock.Unlock()
 	if !ok {
 		return ErrInvalidTunnel
 	}
@@ -469,7 +508,11 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 // sendMsgToAllAPI broadcasts an api.Message to all api.Connection which are known to the Router.
 // Useful for announcing incoming onion tunnels.
 func (r *Router) sendMsgToAllAPI(msg api.Message) (err error) {
-	for _, apiConn := range r.apiConnections {
+	r.apiConnectionsLock.Lock()
+	apiConns := r.apiConnections
+	r.apiConnectionsLock.Unlock()
+
+	for _, apiConn := range apiConns {
 		sendError := apiConn.Send(msg)
 		if sendError != nil {
 			sendError = apiConn.Terminate()
@@ -501,13 +544,20 @@ func (r *Router) sendDataToAPI(tunnelID uint32, data []byte) (err error) {
 
 // RegisterIncomingConnection takes care of tracking the state of an incoming tunnel and announcing it to all API connections.
 func (r *Router) RegisterIncomingConnection(tunnel *tunnelSegment) (err error) {
+	r.tunnelsLock.Lock()
+
 	if _, ok := r.tunnels[tunnel.prevHopTunnelID]; !ok {
+		r.tunnelsLock.Unlock()
 		return ErrInvalidTunnel
 	}
 
+	r.apiConnectionsLock.Lock()
 	r.tunnels[tunnel.prevHopTunnelID] = make([]*api.Connection, len(r.apiConnections))
 	copy(r.tunnels[tunnel.prevHopTunnelID], r.apiConnections)
+	r.apiConnectionsLock.Unlock()
 	r.incomingTunnels[tunnel.prevHopTunnelID] = tunnel
+
+	r.tunnelsLock.Unlock()
 
 	incomingMsg := api.OnionTunnelIncoming{
 		TunnelID: tunnel.prevHopTunnelID,
@@ -522,12 +572,14 @@ func (r *Router) RemoveAPIConnection(apiConn *api.Connection) (err error) {
 		err = r.RemoveAPIConnectionFromTunnel(tunnelID, apiConn)
 	}
 
+	r.apiConnectionsLock.Lock()
 	for i, conn := range r.apiConnections {
 		if conn == apiConn {
 			r.apiConnections = append(r.apiConnections[:i], r.apiConnections[i+1:]...)
 			break
 		}
 	}
+	r.apiConnectionsLock.Unlock()
 
 	return err
 }
@@ -535,6 +587,9 @@ func (r *Router) RemoveAPIConnection(apiConn *api.Connection) (err error) {
 // RemoveAPIConnectionFromTunnel unregisters an api.Connection as a listener on the given tunnel.
 // Will also initiate tunnel teardown if no api.Connection is registered for the tunnel anymore.
 func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Connection) (err error) {
+	r.tunnelsLock.Lock()
+	defer r.tunnelsLock.Unlock()
+
 	if _, ok := r.tunnels[tunnelID]; !ok {
 		return
 	}
@@ -561,6 +616,10 @@ func (r *Router) RemoveAPIConnectionFromTunnel(tunnelID uint32, apiConn *api.Con
 func (r *Router) newTunnelID() (tunnelID uint32) {
 	random := mathRand.New(mathRand.NewSource(time.Now().UnixNano())) //nolint:gosec // pseudo-rand is good enough. We just need uniqueness.
 	tunnelID = random.Uint32()
+
+	r.tunnelsLock.Lock()
+	defer r.tunnelsLock.Unlock()
+
 	// ensure that tunnelID is unique
 	for {
 		if _, ok := r.tunnels[tunnelID]; ok {
@@ -577,6 +636,9 @@ func (r *Router) newTunnelID() (tunnelID uint32) {
 
 // removeLink removes a Link from the Router state
 func (r *Router) removeLink(link *Link) {
+	r.linksLock.Lock()
+	defer r.linksLock.Unlock()
+
 	for i, ln := range r.links {
 		if ln == link {
 			r.links = append(r.links[:i], r.links[i+1:]...)
@@ -588,7 +650,10 @@ func (r *Router) removeLink(link *Link) {
 // RemoveTunnel completely unregisters a tunnel from the router closing associated links if no tunnel uses them anymore
 // and shutting down all tunnel handler routines.
 func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
-	if _, ok := r.tunnels[tunnelID]; !ok {
+	r.tunnelsLock.Lock()
+	_, ok := r.tunnels[tunnelID]
+	r.tunnelsLock.Unlock()
+	if !ok {
 		return
 	}
 	for _, link := range r.links {
@@ -600,9 +665,11 @@ func (r *Router) RemoveTunnel(tunnelID uint32) (err error) {
 		}
 	}
 
+	r.tunnelsLock.Lock()
 	delete(r.tunnels, tunnelID)
 	delete(r.outgoingTunnels, tunnelID)
 	delete(r.incomingTunnels, tunnelID)
+	r.tunnelsLock.Unlock()
 
 	return err
 }
@@ -614,7 +681,9 @@ func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error)
 		return nil, err
 	}
 
+	r.linksLock.Lock()
 	r.links = append(r.links, link)
+	r.linksLock.Unlock()
 
 	go r.handleLink(link)
 
@@ -625,7 +694,9 @@ func (r *Router) CreateLink(address net.IP, port uint16) (link *Link, err error)
 func (r *Router) CreateLinkFromExistingConn(conn net.Conn) (link *Link, err error) {
 	link = newLinkFromExistingConn(conn)
 
+	r.linksLock.Lock()
 	r.links = append(r.links, link)
+	r.linksLock.Unlock()
 
 	go r.handleLink(link)
 
@@ -634,6 +705,9 @@ func (r *Router) CreateLinkFromExistingConn(conn net.Conn) (link *Link, err erro
 
 // GetLink checks if a Link exists to the given peer and returns it. If none exists will return nil, false.
 func (r *Router) GetLink(address net.IP, port uint16) (link *Link, ok bool) {
+	r.linksLock.Lock()
+	defer r.linksLock.Unlock()
+
 	for _, link := range r.links {
 		if link.address.Equal(address) && link.port == port {
 			return link, true
