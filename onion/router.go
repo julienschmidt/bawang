@@ -831,28 +831,24 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 // to the respective tunnel handler via the registered Link.dataOut channel.
 func (r *Router) handleLink(link *Link) {
 	goRoutineErr := make(chan error, 10)
-
-	defer func() {
-		r.removeLink(link)
-		err := link.destroy()
-		if err != nil {
-			log.Printf("error terminating link %v\n", err)
+	shuttingDown := false
+	go func() {
+		select {
+		case <-link.Quit:
+			log.Printf("Terminating link")
+			shuttingDown = true
+			r.removeLink(link)
+			_ = link.destroy()
+			return
+		case err := <-goRoutineErr:
+			log.Printf("Error in goroutine: %v\n", err)
 		}
 	}()
 
 	for {
-		select {
-		case <-link.Quit:
-			log.Printf("Terminating link")
-			return
-		case err := <-goRoutineErr:
-			log.Printf("Error in goroutine: %v\n", err)
-		default:
-		}
-
 		msg, err := link.readMsg()
 		if err != nil {
-			if err == io.EOF {
+			if shuttingDown || err == io.EOF {
 				return // connection closed cleanly
 			}
 			log.Printf("Error reading message body: %v, ignoring message", err)
