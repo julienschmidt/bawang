@@ -28,8 +28,8 @@ type Peer struct {
 
 type RPS interface {
 	GetPeer() (peer *Peer, err error)
+	SampleIntermediatePeers(n int, target *Peer) (peers []*Peer, err error)
 	Close()
-	connect() (err error)
 }
 
 type rps struct {
@@ -41,15 +41,14 @@ type rps struct {
 	rd     *bufio.Reader
 }
 
-func New(cfg *config.Config) (r RPS, err error) {
-	r = &rps{
+func New(cfg *config.Config) (RPS, error) {
+	r := &rps{
 		cfg: cfg,
 	}
-	err = r.connect()
-	if err != nil {
+	if err := r.connect(); err != nil {
 		return nil, err
 	}
-	return
+	return r, nil
 }
 
 func (r *rps) connect() (err error) {
@@ -131,4 +130,22 @@ func (r *rps) GetPeer() (peer *Peer, err error) {
 	}
 
 	return peer, nil
+}
+
+func (r *rps) SampleIntermediatePeers(n int, target *Peer) (peers []*Peer, err error) {
+	if n < 2 {
+		return nil, errors.New("invalid number of hops")
+	}
+
+	peers = make([]*Peer, n, 0)
+	for i := 0; i < n-1; i++ {
+		var peer *Peer
+		peer, err = r.GetPeer()
+		if err != nil {
+			return nil, err
+		}
+		peers = append(peers, peer)
+	}
+	peers = append(peers, target)
+	return peers, nil
 }

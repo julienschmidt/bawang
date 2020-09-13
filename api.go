@@ -55,21 +55,16 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 			}
 
 			// sample intermediate peers
-			peers := make([]*Peer, cfg.TunnelLength, 0)
-			for i := 0; i < cfg.TunnelLength-1; i++ {
-				var peer *Peer
-				peer, err = rps.GetPeer()
+			var peers []*Peer
+			peers, err = rps.SampleIntermediatePeers(cfg.TunnelLength, targetPeer)
+			if err != nil {
+				log.Printf("Error getting random peer: %v\n", err)
+				err = conn.SendError(0, api.TypeOnionTunnelBuild)
 				if err != nil {
-					log.Printf("Error getting random peer: %v\n", err)
-					err = conn.SendError(0, api.TypeOnionTunnelBuild)
-					if err != nil {
-						log.Printf("Error sending error: %v\n", err)
-						return
-					}
+					log.Printf("Error sending error: %v\n", err)
+					return
 				}
-				peers = append(peers, peer)
 			}
-			peers = append(peers, targetPeer)
 
 			// instruct onion router to build tunnel with given peers
 			var tunnel *onion.Tunnel
@@ -147,7 +142,6 @@ func ListenAPISocket(cfg *config.Config, router *onion.Router, rps rps.RPS, errO
 
 		conn, err := ln.Accept()
 		if err != nil {
-			// TODO: error on client connection
 			log.Printf("Error accepting client connection: %v\n", err)
 			continue
 		}
