@@ -1,6 +1,7 @@
 package onion
 
 import (
+	"bawang/p2p"
 	"bufio"
 	"crypto/rsa"
 	"errors"
@@ -210,4 +211,67 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	assert.Equal(t, 0, len(router4.tunnels))
 
 	close(quitChan)
+}
+
+func TestRouter_HandleRounds(t *testing.T) {
+	// load config files
+	cfgPeer1 := config.Config{}
+	err := cfgPeer1.FromFile("../.testing/bootstrap.conf")
+	require.Nil(t, err)
+
+	cfgPeer2 := config.Config{}
+	err = cfgPeer2.FromFile("../.testing/peer-2.conf")
+	require.Nil(t, err)
+
+	cfgPeer3 := config.Config{}
+	err = cfgPeer3.FromFile("../.testing/peer-3.conf")
+	require.Nil(t, err)
+
+	cfgPeer4 := config.Config{}
+	err = cfgPeer4.FromFile("../.testing/peer-4.conf")
+	require.Nil(t, err)
+
+	// setup peers
+	intermediateHops := []*rps.Peer{
+		{Port: uint16(cfgPeer2.P2PPort), Address: net.ParseIP(cfgPeer2.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer2.HostKey.N, E: cfgPeer2.HostKey.E}},
+		{Port: uint16(cfgPeer3.P2PPort), Address: net.ParseIP(cfgPeer3.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer3.HostKey.N, E: cfgPeer3.HostKey.E}},
+		{Port: uint16(cfgPeer4.P2PPort), Address: net.ParseIP(cfgPeer4.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer4.HostKey.N, E: cfgPeer4.HostKey.E}},
+	}
+
+	// setup routers
+	router1 := newRouterWithRPS(&cfgPeer1, &mockRPS{
+		peers: intermediateHops,
+	})
+	require.NotNil(t, router1)
+
+	router2 := newRouterWithRPS(&cfgPeer2, nil)
+	require.NotNil(t, router2)
+
+	router3 := newRouterWithRPS(&cfgPeer3, nil)
+	require.NotNil(t, router3)
+
+	router4 := newRouterWithRPS(&cfgPeer4, nil)
+	require.NotNil(t, router4)
+	errChanRounds := make(chan error)
+	quitChan := make(chan struct{})
+	errChanOnion1 := make(chan error)
+	errChanOnion2 := make(chan error)
+	errChanOnion3 := make(chan error)
+	errChanOnion4 := make(chan error)
+
+	go ListenOnionSocket(&cfgPeer1, router1, errChanOnion1, quitChan)
+	go ListenOnionSocket(&cfgPeer2, router2, errChanOnion2, quitChan)
+	go ListenOnionSocket(&cfgPeer3, router3, errChanOnion3, quitChan)
+	go ListenOnionSocket(&cfgPeer4, router4, errChanOnion4, quitChan)
+
+	time.Sleep(1 * time.Second)
+	go router1.HandleRounds(errChanRounds, quitChan)
+	time.Sleep(1 * time.Second)
+
+	assert.NotNil(t, router1.coverTunnel)
+	assert.Equal(t, 1, len(router1.outgoingTunnels))
+	assert.Equal(t, 1, len(router1.tunnels))
+
+	err = router1.SendCover(2 * p2p.MessageSize + 1)
+	assert.Nil(t, err)
 }
