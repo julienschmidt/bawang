@@ -45,7 +45,7 @@ func (r *mockRPS) Close() {}
 
 var _ rps.RPS = &mockRPS{}
 
-func TestOnionNewRoute(t *testing.T) {
+func TestOnionNewRouter(t *testing.T) {
 	router, err := NewRouter(nil)
 	require.NotNil(t, err)
 	require.Nil(t, router)

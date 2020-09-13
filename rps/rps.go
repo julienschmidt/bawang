@@ -42,6 +42,10 @@ type rps struct {
 }
 
 func New(cfg *config.Config) (RPS, error) {
+	if cfg == nil {
+		return nil, errors.New("invalid config")
+	}
+
 	r := &rps{
 		cfg: cfg,
 	}
