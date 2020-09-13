@@ -15,7 +15,13 @@ import (
 	"bawang/rps"
 )
 
-func TestRouterBuildTunnel(t *testing.T) {
+func TestOnionNewRoute(t *testing.T) {
+	router, err := NewRouter(nil)
+	require.NotNil(t, err)
+	require.Nil(t, router)
+}
+
+func TestOnionRouterBuildTunnel(t *testing.T) {
 	cfgPeer1 := config.Config{}
 	err := cfgPeer1.FromFile("../.testing/bootstrap.conf")
 	require.Nil(t, err)
@@ -23,7 +29,8 @@ func TestRouterBuildTunnel(t *testing.T) {
 	apiConn1 := api.NewConnection(apiServer1)
 	router1 := newRouterWithRPS(&cfgPeer1, nil)
 	require.NotNil(t, router1)
-	router1.apiConnections = []*api.Connection{apiConn1}
+	router1.RegisterAPIConnection(apiConn1)
+	require.Len(t, router1.apiConnections, 1)
 
 	cfgPeer2 := config.Config{}
 	err = cfgPeer2.FromFile("../.testing/peer-2.conf")
@@ -44,7 +51,8 @@ func TestRouterBuildTunnel(t *testing.T) {
 	apiConn4 := api.NewConnection(apiServer4)
 	router4 := newRouterWithRPS(&cfgPeer4, nil)
 	require.NotNil(t, router4)
-	router4.apiConnections = []*api.Connection{apiConn4}
+	router4.RegisterAPIConnection(apiConn4)
+	require.Len(t, router4.apiConnections, 1)
 
 	// now start all listeners
 	quitChan := make(chan struct{})
@@ -135,7 +143,7 @@ func TestRouterBuildTunnel(t *testing.T) {
 	assert.Equal(t, responsePayload, onionData.Data)
 
 	// now we tear down the tunnel from the receiving end
-	err = router4.RemoveAPIConnectionFromTunnel(onionIncoming.TunnelID, apiConn4)
+	err = router4.RemoveAPIConnection(apiConn4)
 	require.Nil(t, err)
 	_, _ = rd.Read(apiBuf)      // empty the pipe buffer of api conn 1 otherwise writes will block since pipes are not buffered
 	time.Sleep(2 * time.Second) // wait for traffic to propagate
@@ -150,4 +158,6 @@ func TestRouterBuildTunnel(t *testing.T) {
 
 	assert.Equal(t, 0, len(router4.incomingTunnels))
 	assert.Equal(t, 0, len(router4.tunnels))
+
+	close(quitChan)
 }
