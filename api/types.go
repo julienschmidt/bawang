@@ -57,6 +57,7 @@ const (
 	// Enroll reserved until 689
 )
 
+// AppType is the type of an app to port mapping in a RPSPeer reply.
 type AppType uint16
 
 func (at AppType) valid() bool {

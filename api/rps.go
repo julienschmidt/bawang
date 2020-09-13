@@ -5,27 +5,33 @@ import (
 	"net"
 )
 
+// RPSQuery is used to ask RPS to reply with a random peer.
 type RPSQuery struct {
 }
 
+// Type returns the type of the message.
 func (msg *RPSQuery) Type() Type {
 	return TypeRPSQuery
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *RPSQuery) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *RPSQuery) PackedSize() (n int) {
 	n = 0
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *RPSQuery) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	return n, nil
 }
 
+// RPSPeer is sent by the RPS module as a response to the RPS QUERY message.
 type RPSPeer struct {
 	Port        uint16
 	IPv6        bool
@@ -34,10 +40,12 @@ type RPSPeer struct {
 	DestHostKey []byte
 }
 
+// Type returns the type of the message.
 func (msg *RPSPeer) Type() Type {
 	return TypeRPSPeer
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *RPSPeer) Parse(data []byte) (err error) {
 	var minSize = 2 + 1 + 1 + 4
 	if len(data) < minSize {
@@ -86,6 +94,7 @@ func (msg *RPSPeer) Parse(data []byte) (err error) {
 	return nil
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *RPSPeer) PackedSize() (n int) {
 	n = 2 + 1 + 1 + len(msg.PortMap)*4 + 4 + len(msg.DestHostKey)
 	if msg.IPv6 {
@@ -94,6 +103,7 @@ func (msg *RPSPeer) PackedSize() (n int) {
 	return n
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *RPSPeer) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {

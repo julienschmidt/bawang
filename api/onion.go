@@ -8,6 +8,7 @@ import (
 	"net"
 )
 
+// OnionTunnelBuild is used to request the Onion module to build a tunnel to the given destination in the next period.
 type OnionTunnelBuild struct {
 	IPv6        bool
 	OnionPort   uint16
@@ -15,10 +16,12 @@ type OnionTunnelBuild struct {
 	DestHostKey []byte
 }
 
+// Type returns the type of the message.
 func (msg *OnionTunnelBuild) Type() Type {
 	return TypeOnionTunnelBuild
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionTunnelBuild) Parse(data []byte) (err error) {
 	const minSize = 2 + 2 + 4
 	if len(data) < minSize {
@@ -46,6 +49,7 @@ func (msg *OnionTunnelBuild) Parse(data []byte) (err error) {
 	return nil
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionTunnelBuild) PackedSize() (n int) {
 	n = 1 + 1 + 2 + 4 + len(msg.DestHostKey)
 	if msg.IPv6 {
@@ -54,6 +58,7 @@ func (msg *OnionTunnelBuild) PackedSize() (n int) {
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionTunnelBuild) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -87,6 +92,7 @@ func (msg *OnionTunnelBuild) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// ParseHostKey parses the host key contained in the message as a RSA public key.
 func (msg *OnionTunnelBuild) ParseHostKey() (key *rsa.PublicKey, err error) {
 	key, err = x509.ParsePKCS1PublicKey(msg.DestHostKey)
 	if err != nil {
@@ -95,15 +101,18 @@ func (msg *OnionTunnelBuild) ParseHostKey() (key *rsa.PublicKey, err error) {
 	return key, nil
 }
 
+// OnionTunnelReady is sent by the Onion module when a requested tunnel is built.
 type OnionTunnelReady struct {
 	TunnelID    uint32
 	DestHostKey []byte
 }
 
+// Type returns the type of the message.
 func (msg *OnionTunnelReady) Type() Type {
 	return TypeOnionTunnelReady
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionTunnelReady) Parse(data []byte) (err error) {
 	if len(data) < 4 {
 		return ErrInvalidMessage
@@ -116,11 +125,13 @@ func (msg *OnionTunnelReady) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionTunnelReady) PackedSize() (n int) {
 	n = 4 + len(msg.DestHostKey)
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionTunnelReady) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -131,14 +142,17 @@ func (msg *OnionTunnelReady) Pack(buf []byte) (n int, err error) {
 	return
 }
 
+// OnionTunnelIncoming is sent by the Onion module on all of its API connections to signal a new incoming tunnel connection.
 type OnionTunnelIncoming struct {
 	TunnelID uint32
 }
 
+// Type returns the type of the message.
 func (msg *OnionTunnelIncoming) Type() Type {
 	return TypeOnionTunnelIncoming
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionTunnelIncoming) Parse(data []byte) (err error) {
 	if len(data) != 4 {
 		return ErrInvalidMessage
@@ -147,11 +161,13 @@ func (msg *OnionTunnelIncoming) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionTunnelIncoming) PackedSize() (n int) {
 	n = 4
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionTunnelIncoming) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -161,14 +177,17 @@ func (msg *OnionTunnelIncoming) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// OnionTunnelDestroy is used to instruct the Onion module that a tunnel it created is no longer in use and can now be destroyed.
 type OnionTunnelDestroy struct {
 	TunnelID uint32
 }
 
+// Type returns the type of the message.
 func (msg *OnionTunnelDestroy) Type() Type {
 	return TypeOnionTunnelDestroy
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionTunnelDestroy) Parse(data []byte) (err error) {
 	if len(data) != 4 {
 		return ErrInvalidMessage
@@ -177,11 +196,13 @@ func (msg *OnionTunnelDestroy) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionTunnelDestroy) PackedSize() (n int) {
 	n = 4
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionTunnelDestroy) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -191,15 +212,18 @@ func (msg *OnionTunnelDestroy) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// OnionTunnelData is used to ask the Onion module to forward data through a tunnel.
 type OnionTunnelData struct {
 	TunnelID uint32
 	Data     []byte
 }
 
+// Type returns the type of the message.
 func (msg *OnionTunnelData) Type() Type {
 	return TypeOnionTunnelData
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionTunnelData) Parse(data []byte) (err error) {
 	if len(data) < 4 {
 		return ErrInvalidMessage
@@ -211,11 +235,13 @@ func (msg *OnionTunnelData) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionTunnelData) PackedSize() (n int) {
 	n = 4 + len(msg.Data)
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionTunnelData) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -226,15 +252,19 @@ func (msg *OnionTunnelData) Pack(buf []byte) (n int, err error) {
 	return
 }
 
+// OnionError is sent by the Onion module to signal an error condition
+// which stems from servicing an earlier request.
 type OnionError struct {
 	RequestType Type
 	TunnelID    uint32
 }
 
+// Type returns the type of the message.
 func (msg *OnionError) Type() Type {
 	return TypeOnionError
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionError) Parse(data []byte) (err error) {
 	if len(data) != 8 {
 		return ErrInvalidMessage
@@ -244,11 +274,13 @@ func (msg *OnionError) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionError) PackedSize() (n int) {
 	n = 8
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionError) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {
@@ -261,14 +293,17 @@ func (msg *OnionError) Pack(buf []byte) (n int, err error) {
 	return n, nil
 }
 
+// OnionCover instructs the onion module to send cover traffic to a random destination.
 type OnionCover struct {
 	CoverSize uint16
 }
 
+// Type returns the type of the message.
 func (msg *OnionCover) Type() Type {
 	return TypeOnionCover
 }
 
+// Parse fills the struct with values parsed from the given bytes slice.
 func (msg *OnionCover) Parse(data []byte) (err error) {
 	if len(data) != 4 {
 		return ErrInvalidMessage
@@ -277,11 +312,13 @@ func (msg *OnionCover) Parse(data []byte) (err error) {
 	return
 }
 
+// PackedSize returns the number of bytes required if serialized to bytes.
 func (msg *OnionCover) PackedSize() (n int) {
 	n = 4
 	return
 }
 
+// Pack serializes the values into a bytes slice.
 func (msg *OnionCover) Pack(buf []byte) (n int, err error) {
 	n = msg.PackedSize()
 	if cap(buf) < n {

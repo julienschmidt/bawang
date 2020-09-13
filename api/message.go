@@ -16,10 +16,10 @@ const flagIPv6 = 1
 
 // Message abstracts an API message.
 type Message interface {
-	Type() Type
-	Parse(data []byte) error
-	Pack(buf []byte) (n int, err error)
-	PackedSize() (n int)
+	Type() Type                         // Type returns the type of the message.
+	Parse(data []byte) error            // Parse fills the struct with values parsed from the given bytes slice.
+	Pack(buf []byte) (n int, err error) // Pack serializes the values into a bytes slice.
+	PackedSize() (n int)                // PackedSize returns the number of bytes required if serialized to bytes.
 }
 
 var (
@@ -128,6 +128,7 @@ func parseMessage(msgType Type, body []byte) (Message, error) {
 	}
 }
 
+// ReadIP reads a net.IP address from bytes in network byte order.
 func ReadIP(ipv6 bool, data []byte) net.IP {
 	if ipv6 {
 		return net.IP{
