@@ -109,13 +109,15 @@ func (link *Link) isUnused() (unused bool) {
 
 // register registers a message output channel for a tunnel with ID tunnelID with this link
 // after registering incoming messages for this tunnel ID will be queued into dataOut
-func (link *Link) register(tunnelID uint32, dataOut chan message) (err error) {
+func (link *Link) register(tunnelID uint32, dataOut chan message, overwrite bool) (err error) {
 	link.dataLock.Lock()
 	defer link.dataLock.Unlock()
 
-	_, ok := link.dataOut[tunnelID]
-	if ok {
-		return ErrAlreadyRegistered
+	if !overwrite {
+		_, ok := link.dataOut[tunnelID]
+		if ok {
+			return ErrAlreadyRegistered
+		}
 	}
 
 	link.dataOut[tunnelID] = dataOut

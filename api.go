@@ -62,20 +62,21 @@ func HandleAPIConnection(nc net.Conn, router *onion.Router) {
 			}
 
 			// instruct onion router to build tunnel with given peers
-			var tunnel *onion.Tunnel
-			tunnel, err = router.BuildTunnel(targetPeer, conn)
-			if err != nil {
+			tunnelReplyChan := router.BuildTunnel(targetPeer, conn)
+
+			// wait for the reply
+			tunnelReply, ok := <-tunnelReplyChan
+			if !ok { // chan was closed, meaning the router shut down
+				return
+			}
+			if tunnelReply.Err != nil {
 				log.Printf("Error building tunnel: %v\n", err)
-				var tunnelID uint32 = 0
-				if tunnel != nil {
-					tunnelID = tunnel.ID()
-				}
-				err = conn.SendError(tunnelID, api.TypeOnionTunnelBuild)
+				err = conn.SendError(0, api.TypeOnionTunnelBuild)
 				if err != nil {
 					log.Printf("Error sending error: %v\n", err)
 				}
-				return
 			}
+			tunnel := tunnelReply.Tunnel
 
 			// start handling messages for this tunnel
 			go router.HandleOutgoingTunnel(tunnel)

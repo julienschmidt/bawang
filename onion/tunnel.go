@@ -174,7 +174,7 @@ func tunnelCreateMsg(peerHostKey *rsa.PublicKey) (privDH *[32]byte, msg *p2p.Tun
 	return privDH, msg, nil
 }
 
-// relayTunnelExtendMsg generates new Diffie-Hellan keys and a p2p.RelayTunnelExtend to extend an existing onion tunnel
+// relayTunnelExtendMsg generates new Diffie-Hellman keys and a p2p.RelayTunnelExtend to extend an existing onion tunnel
 // to the given peer.
 func relayTunnelExtendMsg(peerHostKey *rsa.PublicKey, address net.IP, port uint16) (privDH *[32]byte, msg *p2p.RelayTunnelExtend, err error) {
 	privDH, encDHPubKey, err := generateDHKeys(peerHostKey)

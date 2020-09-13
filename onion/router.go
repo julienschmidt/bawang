@@ -39,6 +39,10 @@ type Router struct {
 	outgoingTunnels map[uint32]*Tunnel
 	incomingTunnels map[uint32]*tunnelSegment
 
+	buildQueue []*buildTunnelJob
+	// TODO: destroyQueue []*destroyTunnelJob
+	coverTunnel *Tunnel
+
 	// keeps track of known API connections, which will then receive future api.OnionTunnelIncoming solicitations
 	// and can instruct the onion module to build new tunnels
 	apiConnections []*api.Connection
@@ -65,16 +69,144 @@ func newRouterWithRPS(cfg *config.Config, rps rps.RPS) *Router {
 	}
 }
 
+func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
+	roundTimer := time.NewTicker(60 * time.Second)
+	defer roundTimer.Stop()
+
+	err := r.buildCoverTunnel()
+	if err != nil {
+		errOut <- fmt.Errorf("error building initial cover tunnel: %w", err)
+		return
+	}
+
+	for {
+		select {
+		case <-quit:
+			return
+		case <-roundTimer.C:
+			if len(r.buildQueue) > 0 {
+				successfulBuilds := 0
+				for _, buildJob := range r.buildQueue {
+					var tunnel *Tunnel
+					tunnel, err = r.buildNewTunnel(buildJob.targetPeer, buildJob.apiConn)
+					buildJob.replyChan <- BuildTunnelReply{
+						Tunnel: tunnel,
+						Err:    err,
+					}
+
+					if err == nil {
+						successfulBuilds++
+					}
+				}
+
+				// if we have an actual tunnel now, but did not before, we can close the cover tunnel now.
+				if successfulBuilds > 0 && r.coverTunnel != nil {
+					err = r.coverTunnel.Close()
+					if err != nil {
+						errOut <- fmt.Errorf("error closing cover tunnel: %w", err)
+						return
+					}
+				}
+			}
+
+			// TODO: handle destroy queue
+
+			for _, tunnel := range r.outgoingTunnels {
+				err = r.rebuildTunnel(tunnel)
+				if err != nil {
+					errOut <- fmt.Errorf("error rebuilding tunnel: %w", err)
+					return
+				}
+			}
+		}
+	}
+}
+
 // RegisterAPIConnection adds an api.Connection to the onion router which will then receive future api.OnionTunnelIncoming
 // solicitations and can instruct the onion module to build new tunnels.
 func (r *Router) RegisterAPIConnection(apiConn *api.Connection) {
 	r.apiConnections = append(r.apiConnections, apiConn)
 }
 
-// BuildTunnel takes care of fully initializing an onion tunnel through the given peers with the tunnels destination
-// being the last peer in hops. The given api.Connection is registered with the created Tunnel and will receive
+type buildTunnelJob struct {
+	targetPeer *rps.Peer
+	apiConn    *api.Connection
+	replyChan  chan BuildTunnelReply
+}
+
+// BuildTunnelReply is the reply sent via the replyChan when the tunnel is actually built at the beginning of the next round.
+type BuildTunnelReply struct {
+	Tunnel *Tunnel
+	Err    error
+}
+
+// BuildTunnel queues a job for initialization of an onion tunnel with the tunnels destination being the given target peer
+// and random intermediate hops at the beginning of the next round.
+// The given api.Connection is registered with the created Tunnel and will receive
 // onion traffic for this tunnel.
-func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
+func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (replyChan chan BuildTunnelReply) {
+	replyChan = make(chan BuildTunnelReply)
+
+	buildJob := buildTunnelJob{
+		targetPeer: targetPeer,
+		apiConn:    apiConn,
+		replyChan:  replyChan,
+	}
+
+	r.buildQueue = append(r.buildQueue, &buildJob)
+
+	return replyChan
+}
+
+// buildNewTunnel is used to build a new tunnel with new random intermediate peers.
+func (r *Router) buildNewTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
+	// generate a new, unique tunnel ID
+	tunnelID := r.newTunnelID()
+
+	// actually build the tunnel
+	tunnel, err = r.buildTunnel(targetPeer, tunnelID, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if apiConn != nil {
+		r.tunnels[tunnel.id] = append(r.tunnels[tunnel.id], apiConn)
+	}
+
+	return tunnel, err
+}
+
+// rebuildTunnel is used to rebuild a tunnel with new random intermediate peers.
+func (r *Router) rebuildTunnel(tunnel *Tunnel) (err error) {
+	oldTunnel := *tunnel
+
+	targetPeer := tunnel.hops[len(tunnel.hops)-1]
+
+	_, err = r.buildTunnel(targetPeer, tunnel.id, false)
+	if err != nil {
+		return err
+	}
+
+	oldTunnel.Close()
+
+	return nil
+}
+
+func (r *Router) buildCoverTunnel() error {
+	targetPeer, err := r.rps.GetPeer()
+	if err != nil {
+		return err
+	}
+	tunnel, err := r.buildNewTunnel(targetPeer, nil)
+	if err != nil {
+		return err
+	}
+	r.coverTunnel = tunnel
+	return nil
+}
+
+// buildTunnel is shared by Router.buildNewTunnel and Router.rebuildTunnel to actually perform the tunnel building.
+func (r *Router) buildTunnel(targetPeer *rps.Peer, tunnelID uint32, renewing bool) (tunnel *Tunnel, err error) {
 	if r.cfg.TunnelLength < 3 {
 		return nil, ErrNotEnoughHops
 	}
@@ -87,10 +219,7 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tun
 
 	msgBuf := make([]byte, p2p.MessageSize)
 
-	// generate a new, unique tunnel ID
-	tunnelID := r.newTunnelID()
-
-	// first we fetch us a link connection to the first hop
+	// first we fetch a link connection to the first hop
 	log.Printf("Starting to initialize onion circuit with first hop %v:%v\n", hops[0].Address, hops[0].Port)
 	link, err := r.GetOrCreateLink(hops[0].Address, hops[0].Port)
 	if err != nil {
@@ -98,14 +227,14 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tun
 	}
 
 	tunnel = &Tunnel{
-		link: link,
 		id:   tunnelID,
+		link: link,
 		quit: make(chan struct{}),
 	}
 
 	// now we register an output channel for this link
 	dataOut := make(chan message, 5)
-	err = link.register(tunnelID, dataOut)
+	err = link.register(tunnelID, dataOut, renewing)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +354,6 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tun
 		}
 	}
 
-	r.tunnels[tunnel.id] = append(r.tunnels[tunnel.id], apiConn)
 	r.outgoingTunnels[tunnel.id] = tunnel
 
 	return tunnel, nil
@@ -687,7 +815,7 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 
 			tunnel.nextHopLink = nextLink
 			tunnel.nextHopTunnelID = r.newTunnelID()
-			err = nextLink.register(tunnel.nextHopTunnelID, dataChanNextHop)
+			err = nextLink.register(tunnel.nextHopTunnelID, dataChanNextHop, false)
 			if err != nil {
 				return err
 			}
@@ -784,7 +912,7 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 	// TunnelExtend commands.
 	dataChanPrevHop := make(chan message, 5)
 	dataChanNextHop := make(chan message, 5)
-	err := tunnel.prevHopLink.register(tunnel.prevHopTunnelID, dataChanPrevHop)
+	err := tunnel.prevHopLink.register(tunnel.prevHopTunnelID, dataChanPrevHop, false)
 	if err != nil {
 		errOut <- err
 		return

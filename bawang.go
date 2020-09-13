@@ -39,6 +39,10 @@ func main() {
 		log.Fatalf("Error initializing Onion router: %v", err)
 	}
 
+	// start the router's round logic
+	errChanRounds := make(chan error)
+	go router.HandleRounds(errChanRounds, quitChan)
+
 	// start listening on sockets in child goroutines
 	errChanOnion := make(chan error)
 	go onion.ListenOnionSocket(&cfg, router, errChanOnion, quitChan)
@@ -48,6 +52,9 @@ func main() {
 
 	// handle errors from child goroutines
 	select {
+	case err = <-errChanRounds:
+		close(quitChan)
+		log.Fatalf("Error handling Onion rounds: %v", err)
 	case err = <-errChanOnion:
 		close(quitChan)
 		log.Fatalf("Error listening on Onion socket: %v", err)
