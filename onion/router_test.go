@@ -132,7 +132,8 @@ func TestRouterBuildTunnel(t *testing.T) {
 	// now we tear down the tunnel from the receiving end
 	err = router4.RemoveAPIConnectionFromTunnel(onionIncoming.TunnelID, apiConn4)
 	require.Nil(t, err)
-	time.Sleep(1 * time.Second) // wait for traffic to propagate
+	_, _ = rd.Read(apiBuf)      // empty the pipe buffer of api conn 1 otherwise writes will block since pipes are not buffered
+	time.Sleep(2 * time.Second) // wait for traffic to propagate
 	assert.Equal(t, 0, len(router1.outgoingTunnels))
 	assert.Equal(t, 0, len(router1.tunnels))
 

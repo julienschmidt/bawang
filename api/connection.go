@@ -68,6 +68,6 @@ func (conn *Connection) Terminate() (err error) {
 		return nil
 	}
 
-	conn.nc.Close()
-	return nil
+	err = conn.nc.Close()
+	return err
 }

@@ -49,7 +49,6 @@ func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, qu
 
 		conn, err := ln.Accept()
 		if err != nil {
-			// TODO: error on client connection
 			log.Printf("Error accepting client connection: %v\n", err)
 			continue
 		}

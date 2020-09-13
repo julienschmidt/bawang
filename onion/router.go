@@ -263,6 +263,7 @@ func (r *Router) sendMsgToAPI(tunnelID uint32, msg api.Message) (err error) {
 	}
 	for _, apiConn := range apiConns {
 		sendError := apiConn.Send(msg)
+		log.Printf("sent message to api")
 		if sendError != nil {
 			sendError = apiConn.Terminate()
 			if sendError != nil {
@@ -535,7 +536,13 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel, dataOut chan message) {
 
 			case p2p.TypeTunnelDestroy:
 				// since we are the end of the tunnel we don't need to pass the destroy message along we just need
-				// to gracefully tear down our tunnel
+				// to gracefully tear down our tunnel and announce it to the API
+				err := r.sendMsgToAPI(tunnel.ID(), &api.OnionTunnelDestroy{
+					TunnelID: tunnel.ID(),
+				})
+				if err != nil {
+					log.Printf("error announcing tunnel destroy for ID %v to api %v\n", tunnel.ID(), err)
+				}
 				return
 
 			default: // since we assume the circuit to be fully built we cannot accept any other message
@@ -727,8 +734,15 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 				}
 			case p2p.TypeTunnelDestroy:
 				// we pass the destroy message along and tear down
-				// TODO: send onion error message to API here
-				err = tunnel.nextHopLink.sendDestroyTunnel(tunnel.nextHopTunnelID)
+				if tunnel.nextHopLink != nil {
+					err = tunnel.nextHopLink.sendDestroyTunnel(tunnel.nextHopTunnelID)
+					if err != nil {
+						errOut <- err
+					}
+				}
+				err = r.sendMsgToAPI(tunnel.prevHopTunnelID, &api.OnionTunnelDestroy{
+					TunnelID: tunnel.prevHopTunnelID,
+				})
 				if err != nil {
 					errOut <- err
 				}
@@ -761,6 +775,12 @@ func (r *Router) handleTunnelSegment(tunnel *tunnelSegment, errOut chan error) {
 
 			case p2p.TypeTunnelDestroy:
 				err = tunnel.prevHopLink.sendDestroyTunnel(tunnel.prevHopTunnelID)
+				if err != nil {
+					errOut <- err
+				}
+				err = r.sendMsgToAPI(tunnel.prevHopTunnelID, &api.OnionTunnelDestroy{
+					TunnelID: tunnel.prevHopTunnelID,
+				})
 				if err != nil {
 					errOut <- err
 				}

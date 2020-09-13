@@ -225,11 +225,10 @@ func EncryptRelay(packedMsg []byte, key *[32]byte) (encMsg []byte, err error) {
 
 // RelayTunnelExtend commands the addressed tunnel hop to extend the tunnel by another hop.
 type RelayTunnelExtend struct {
-	// TODO: encrypted DH key -> next hop creates TunnelCreate message from it
 	IPv6        bool
 	Port        uint16
 	Address     net.IP
-	EncDHPubKey [512]byte // encrypted with peer pub key
+	EncDHPubKey [512]byte //  encrypted DH key -> next hop creates TunnelCreate message from it
 }
 
 // Type returns the relay type of the message.
