@@ -93,6 +93,7 @@ See [README.md](../../README.md).
 
 ## Known Issues
 - `verbose` config option is ignored.
+- The round logic and cover traffic sending are bugged.
 
 
 ## Future Work
