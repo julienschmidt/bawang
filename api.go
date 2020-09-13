@@ -14,7 +14,14 @@ import (
 
 type Peer = rps.Peer
 
-func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, router *onion.Router) {
+// HandleAPIConnection initializes a given net.Conn as an API Connection and accepts API messages,
+// dispatching to the respective logic.
+func HandleAPIConnection(cfg *config.Config, nc net.Conn, rps rps.RPS, router *onion.Router) {
+	// init net.Conn as an api.Connection and register it with the onion router
+	conn := api.NewConnection(nc)
+	router.RegisterAPIConnection(conn)
+
+	// ensure proper cleanup
 	defer func() {
 		err := router.RemoveAPIConnection(conn)
 		if err != nil {
@@ -85,7 +92,6 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 					return
 				}
 			}
-			log.Println("Onion TunnelID Build")
 
 		case *api.OnionTunnelDestroy:
 			log.Printf("Destroying Onion tunnel with ID: %v\n", msg.TunnelID)
@@ -116,7 +122,6 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 				_ = conn.SendError(0, api.TypeOnionCover)
 				return
 			}
-			log.Println("Onion TunnelID Cover")
 
 		default:
 			log.Println("Invalid message type:", apiMsg.Type())
@@ -124,6 +129,8 @@ func HandleAPIConnection(cfg *config.Config, conn *api.Connection, rps rps.RPS, 
 	}
 }
 
+// ListenAPISocket opens the API endpoint socket and accepts incoming connections,
+// which are handled concurrently in goroutines.
 func ListenAPISocket(cfg *config.Config, router *onion.Router, rps rps.RPS, errOut chan error, quit chan struct{}) {
 	ln, err := net.Listen("tcp", cfg.OnionAPIAddress)
 	if err != nil {
@@ -147,9 +154,7 @@ func ListenAPISocket(cfg *config.Config, router *onion.Router, rps rps.RPS, errO
 		}
 		log.Println("Received new connection")
 
-		apiConn := api.NewConnection(conn)
-		router.RegisterAPIConnection(apiConn)
-
-		go HandleAPIConnection(cfg, apiConn, rps, router)
+		// handle connections concurrently in goroutines
+		go HandleAPIConnection(cfg, conn, rps, router)
 	}
 }
