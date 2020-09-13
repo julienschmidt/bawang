@@ -23,11 +23,12 @@ var (
 
 // Tunnel keeps track of the state of an onion tunnel initiated by the current peer.
 type Tunnel struct {
-	id      uint32
-	counter uint32
-	hops    []*rps.Peer
-	link    *Link
-	quit    chan struct{}
+	id          uint32
+	sendCounter uint32
+	recvCounter uint32
+	hops        []*rps.Peer
+	link        *Link
+	quit        chan struct{}
 }
 
 // ID returns the tunnel's ID
@@ -87,7 +88,8 @@ type tunnelSegment struct {
 	prevHopLink     *Link
 	nextHopLink     *Link     // can be nil if the tunnel terminates at the current hop
 	dhShared        *[32]byte // Diffie-Hellman key shared with the previous hop
-	counter         uint32
+	sendCounter     uint32
+	recvCounter     uint32
 
 	quit chan struct{}
 }

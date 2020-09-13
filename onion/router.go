@@ -334,7 +334,7 @@ func (r *Router) buildTunnel(targetPeer *rps.Peer, tunnelID uint32, renewing boo
 		}
 
 		var n int
-		tunnel.counter, n, err = p2p.PackRelayMessage(msgBuf, tunnel.counter, extendMsg)
+		tunnel.sendCounter, n, err = p2p.PackRelayMessage(msgBuf, tunnel.sendCounter, extendMsg)
 		if err != nil {
 			return nil, err
 		}
@@ -416,7 +416,7 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 		r.tunnelsLock.Unlock()
 
 		var n int
-		tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &relayData)
+		tunnel.sendCounter, n, err = p2p.PackRelayMessage(buf, tunnel.sendCounter, &relayData)
 		if err != nil {
 			return err
 		}
@@ -432,7 +432,7 @@ func (r *Router) SendData(tunnelID uint32, payload []byte) (err error) {
 		r.tunnelsLock.Unlock()
 
 		var n int
-		tunnelSegment.counter, n, err = p2p.PackRelayMessage(buf, tunnelSegment.counter, &relayData)
+		tunnelSegment.sendCounter, n, err = p2p.PackRelayMessage(buf, tunnelSegment.sendCounter, &relayData)
 		if err != nil {
 			return err
 		}
@@ -472,7 +472,7 @@ func (r *Router) SendCover(coverSize uint16) (err error) {
 
 		var n int
 		buf := make([]byte, p2p.RelayMessageSize)
-		r.coverTunnel.counter, n, err = p2p.PackRelayMessage(buf, r.coverTunnel.counter, relayCover)
+		r.coverTunnel.sendCounter, n, err = p2p.PackRelayMessage(buf, r.coverTunnel.sendCounter, relayCover)
 		if err != nil {
 			return err
 		}
@@ -791,13 +791,13 @@ func (r *Router) HandleOutgoingTunnel(tunnel *Tunnel) {
 
 				if ok { // message is meant for us from a hop
 					// replay protection
-					if relayHdr.GetCounter() <= tunnel.counter {
+					if relayHdr.GetCounter() <= tunnel.recvCounter {
 						log.Printf("Received message with invalid counter. Terminating tunnel.")
 						return
 					}
 
 					// update message counter
-					tunnel.counter = relayHdr.GetCounter()
+					tunnel.recvCounter = relayHdr.GetCounter()
 
 					switch relayHdr.RelayType {
 					case p2p.RelayTypeTunnelData:
@@ -867,13 +867,13 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 		}
 
 		// replay protection
-		if relayHdr.GetCounter() <= tunnel.counter {
+		if relayHdr.GetCounter() <= tunnel.recvCounter {
 			log.Printf("Received message with invalid counter. Terminating tunnel.")
 			return
 		}
 
 		// update message counter
-		tunnel.counter = relayHdr.GetCounter()
+		tunnel.recvCounter = relayHdr.GetCounter()
 
 		switch relayHdr.RelayType {
 		case p2p.RelayTypeTunnelData:
@@ -943,7 +943,7 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 
 				extendedMsg := relayTunnelExtendedMsgFromTunnelCreatedMsg(&createdMsg)
 				var n int
-				tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &extendedMsg)
+				tunnel.sendCounter, n, err = p2p.PackRelayMessage(buf, tunnel.sendCounter, &extendedMsg)
 				if err != nil {
 					return err
 				}
@@ -972,7 +972,7 @@ func (r *Router) handleIncomingTunnelRelayMsg(buf []byte, dataChanNextHop chan m
 			if coverMsg.Ping { // we received a ping message, echo it back as pong
 				coverReply := p2p.RelayTunnelCover{Ping: false}
 				var n int
-				tunnel.counter, n, err = p2p.PackRelayMessage(buf, tunnel.counter, &coverReply)
+				tunnel.sendCounter, n, err = p2p.PackRelayMessage(buf, tunnel.sendCounter, &coverReply)
 				if err != nil {
 					return err
 				}
