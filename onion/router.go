@@ -80,11 +80,6 @@ func (r *Router) BuildTunnel(targetPeer *rps.Peer, apiConn *api.Connection) (tun
 		return nil, fmt.Errorf("error sampling peers: %w", err)
 	}
 
-	return r.buildTunnelWithHops(hops, apiConn)
-}
-
-// buildTunnelWithHops takes care of actually initializing an onion tunnel with the chosen hops.
-func (r *Router) buildTunnelWithHops(hops []*rps.Peer, apiConn *api.Connection) (tunnel *Tunnel, err error) {
 	msgBuf := make([]byte, p2p.MessageSize)
 
 	// generate a new, unique tunnel ID

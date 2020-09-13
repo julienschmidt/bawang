@@ -3,6 +3,7 @@ package onion
 import (
 	"bufio"
 	"crypto/rsa"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -15,6 +16,35 @@ import (
 	"bawang/rps"
 )
 
+type mockRPS struct {
+	peers []*rps.Peer
+}
+
+func (r *mockRPS) GetPeer() (peer *rps.Peer, err error) {
+	if len(r.peers) > 0 {
+		peer = r.peers[0]
+		r.peers = r.peers[1:]
+		return peer, nil
+	}
+	return nil, errors.New("no peers")
+}
+
+func (r *mockRPS) SampleIntermediatePeers(n int, target *rps.Peer) (peers []*rps.Peer, err error) {
+	peers = make([]*rps.Peer, n)
+	for i := 0; i < n-1; i++ {
+		peers[i], err = r.GetPeer()
+		if err != nil {
+			return nil, err
+		}
+	}
+	peers[n-1] = target
+	return peers, nil
+}
+
+func (r *mockRPS) Close() {}
+
+var _ rps.RPS = &mockRPS{}
+
 func TestOnionNewRoute(t *testing.T) {
 	router, err := NewRouter(nil)
 	require.NotNil(t, err)
@@ -22,35 +52,53 @@ func TestOnionNewRoute(t *testing.T) {
 }
 
 func TestOnionRouterBuildTunnel(t *testing.T) {
+	// load config files
 	cfgPeer1 := config.Config{}
 	err := cfgPeer1.FromFile("../.testing/bootstrap.conf")
 	require.Nil(t, err)
-	apiServer1, apiClient1 := net.Pipe()
-	apiConn1 := api.NewConnection(apiServer1)
-	router1 := newRouterWithRPS(&cfgPeer1, nil)
-	require.NotNil(t, router1)
-	router1.RegisterAPIConnection(apiConn1)
-	require.Len(t, router1.apiConnections, 1)
 
 	cfgPeer2 := config.Config{}
 	err = cfgPeer2.FromFile("../.testing/peer-2.conf")
 	require.Nil(t, err)
-	router2 := newRouterWithRPS(&cfgPeer2, nil)
-	require.NotNil(t, router2)
 
 	cfgPeer3 := config.Config{}
 	err = cfgPeer3.FromFile("../.testing/peer-3.conf")
 	require.Nil(t, err)
-	router3 := newRouterWithRPS(&cfgPeer3, nil)
-	require.NotNil(t, router3)
 
 	cfgPeer4 := config.Config{}
 	err = cfgPeer4.FromFile("../.testing/peer-4.conf")
 	require.Nil(t, err)
-	apiServer4, apiClient4 := net.Pipe()
-	apiConn4 := api.NewConnection(apiServer4)
+
+	// setup peers
+	intermediateHops := []*rps.Peer{
+		{Port: uint16(cfgPeer2.P2PPort), Address: net.ParseIP(cfgPeer2.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer2.HostKey.N, E: cfgPeer2.HostKey.E}},
+		{Port: uint16(cfgPeer3.P2PPort), Address: net.ParseIP(cfgPeer3.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer3.HostKey.N, E: cfgPeer3.HostKey.E}},
+	}
+	targetPeer := rps.Peer{Port: uint16(cfgPeer4.P2PPort), Address: net.ParseIP(cfgPeer4.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer4.HostKey.N, E: cfgPeer4.HostKey.E}}
+
+	// setup routers
+	router1 := newRouterWithRPS(&cfgPeer1, &mockRPS{
+		peers: intermediateHops,
+	})
+	require.NotNil(t, router1)
+
+	router2 := newRouterWithRPS(&cfgPeer2, nil)
+	require.NotNil(t, router2)
+
+	router3 := newRouterWithRPS(&cfgPeer3, nil)
+	require.NotNil(t, router3)
+
 	router4 := newRouterWithRPS(&cfgPeer4, nil)
 	require.NotNil(t, router4)
+
+	// register dummy API conns
+	apiServer1, apiClient1 := net.Pipe()
+	apiConn1 := api.NewConnection(apiServer1)
+	router1.RegisterAPIConnection(apiConn1)
+	require.Len(t, router1.apiConnections, 1)
+
+	apiServer4, apiClient4 := net.Pipe()
+	apiConn4 := api.NewConnection(apiServer4)
 	router4.RegisterAPIConnection(apiConn4)
 	require.Len(t, router4.apiConnections, 1)
 
@@ -66,17 +114,11 @@ func TestOnionRouterBuildTunnel(t *testing.T) {
 	go ListenOnionSocket(&cfgPeer4, router4, errChanOnion4, quitChan)
 
 	time.Sleep(1 * time.Second) // annoyingly wait for the sockets to fully start
-
-	peers := []*rps.Peer{
-		{Port: uint16(cfgPeer2.P2PPort), Address: net.ParseIP(cfgPeer2.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer2.HostKey.N, E: cfgPeer2.HostKey.E}},
-		{Port: uint16(cfgPeer3.P2PPort), Address: net.ParseIP(cfgPeer3.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer3.HostKey.N, E: cfgPeer3.HostKey.E}},
-		{Port: uint16(cfgPeer4.P2PPort), Address: net.ParseIP(cfgPeer4.P2PHostname), HostKey: &rsa.PublicKey{N: cfgPeer4.HostKey.N, E: cfgPeer4.HostKey.E}},
-	}
-	tunnel, err := router1.buildTunnelWithHops(peers, apiConn1)
+	tunnel, err := router1.BuildTunnel(&targetPeer, apiConn1)
 	require.Nil(t, err)
 	require.NotNil(t, tunnel)
 
-	assert.Equal(t, len(peers), len(tunnel.hops))
+	assert.Equal(t, len(intermediateHops)+1, len(tunnel.hops))
 	assert.NotNil(t, tunnel.hops[0].DHShared)
 	assert.NotNil(t, tunnel.hops[1].DHShared)
 	assert.NotNil(t, tunnel.hops[2].DHShared)
