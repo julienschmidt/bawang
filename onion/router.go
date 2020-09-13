@@ -75,7 +75,7 @@ func newRouterWithRPS(cfg *config.Config, rps rps.RPS) *Router {
 }
 
 func (r *Router) HandleRounds(errOut chan error, quit chan struct{}) {
-	roundTimer := time.NewTicker(60 * time.Second)
+	roundTimer := time.NewTicker(time.Duration(r.cfg.RoundDuration) * time.Second)
 	defer roundTimer.Stop()
 
 	err := r.buildCoverTunnel()

@@ -33,6 +33,7 @@ All options must be specified in the `[onion]` section.
 | `api_timeout`    | Max. time in seconds API calls may take before aborting         | 5       |          |
 | `verbose`        | Verbosity level. 0 = no informational logging, 2 = max          | 0       |          |
 | `tunnel_length`  | Number of hops (peers) an onion tunnel consists of              | 3       |          |
+| `round_duration` | Length of a round in seconds                                    | 60      |          |
 
 ## Testing
 

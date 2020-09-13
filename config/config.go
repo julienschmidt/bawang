@@ -18,6 +18,7 @@ type Config struct {
 	RPSAPIAddress   string // API socket address of the RPS module
 	OnionAPIAddress string
 	TunnelLength    int
+	RoundDuration   int
 	BuildTimeout    int
 	APITimeout      int
 	Verbosity       int
@@ -49,6 +50,7 @@ func (config *Config) FromFile(path string) error {
 	config.APITimeout = cfg.Section("onion").Key("api_timeout").MustInt(5)
 	config.Verbosity = cfg.Section("onion").Key("verbose").MustInt(0)
 	config.TunnelLength = cfg.Section("onion").Key("tunnel_length").MustInt(3)
+	config.RoundDuration = cfg.Section("onion").Key("round_duration").MustInt(60)
 
 	hostKeyFile := cfg.Section("onion").Key("hostkey").String()
 	if hostKeyFile == "" {
