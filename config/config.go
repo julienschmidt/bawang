@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 
 	"github.com/go-ini/ini"
 )
@@ -110,34 +109,5 @@ func parseHostKey(data []byte) (key *rsa.PrivateKey, err error) {
 		return nil, errors.New("invalid hostkey: hostkey is not an RSA key")
 	default:
 		return nil, errUnknownKeyType
-	}
-}
-
-type logger struct {
-	info  bool
-	debug bool
-}
-
-func (l *logger) Info(msg string) {
-	if l.info {
-		log.Println(msg)
-	}
-}
-
-func (l *logger) Infof(format string, v ...interface{}) {
-	if l.info {
-		log.Printf(format, v...)
-	}
-}
-
-func (l *logger) Debug(msg string) {
-	if l.debug {
-		log.Println(msg)
-	}
-}
-
-func (l *logger) Debugf(format string, v ...interface{}) {
-	if l.debug {
-		log.Printf(format, v...)
 	}
 }
