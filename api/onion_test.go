@@ -1,6 +1,9 @@
 package api
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"net"
 	"strings"
 	"testing"
@@ -85,6 +88,21 @@ func TestOnionTunnelBuild(t *testing.T) {
 		require.NotNil(t, err)
 		require.True(t, strings.HasPrefix(err.Error(), "invalid hostkey:"))
 		require.Nil(t, key)
+	})
+
+	t.Run("ParseHostKey valid", func(t *testing.T) {
+		privKey, err := rsa.GenerateKey(rand.Reader, 4096)
+		require.Nil(t, err)
+		pubKey := rsa.PublicKey{N: privKey.N, E: privKey.E}
+
+		pubkeyBytes := x509.MarshalPKCS1PublicKey(&pubKey)
+		buildMsg := OnionTunnelBuild{
+			DestHostKey: pubkeyBytes,
+		}
+
+		key, err := buildMsg.ParseHostKey()
+		require.Nil(t, err)
+		require.NotNil(t, key)
 	})
 }
 
