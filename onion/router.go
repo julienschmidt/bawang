@@ -4,6 +4,7 @@ package onion
 import (
 	"bytes"
 	"crypto/sha256"
+	"io"
 	"log"
 	mathRand "math/rand"
 	"net"
@@ -773,6 +774,9 @@ func (r *Router) handleLink(link *Link) {
 
 		msg, err := link.readMsg()
 		if err != nil {
+			if err == io.EOF {
+				return // connection closed cleanly
+			}
 			log.Printf("Error reading message body: %v, ignoring message", err)
 			err = r.RemoveTunnel(msg.hdr.TunnelID)
 			if err != nil {
