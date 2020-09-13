@@ -16,7 +16,7 @@ import (
 	"bawang/config"
 )
 
-// ListenOnionSocket opens a tls listener on the host specified in cfg that handles incoming p2p onion traffic.
+// ListenOnionSocket opens a TLS listener on the host specified in cfg that handles incoming P2P onion traffic.
 func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, quit chan struct{}) {
 	cert, err := tlsCertFromHostKey(cfg.HostKey)
 	if err != nil {
@@ -37,18 +37,20 @@ func ListenOnionSocket(cfg *config.Config, router *Router, errOut chan error, qu
 	defer ln.Close()
 	log.Printf("Onion Server Listening at %v:%v\n", cfg.P2PHostname, cfg.P2PPort)
 
-	goRoutineErrOut := make(chan error, 10)
-	for {
-		select {
-		case <-quit:
-			return
-		case goRoutineErr := <-goRoutineErrOut:
-			log.Printf("Error in goroutine: %v\n", goRoutineErr)
-		default:
-		}
+	// concurrently wait for a quit signal and close the listener if one is received to stop the loop below when blocking on ln.Accept()
+	shuttingDown := false
+	go func() {
+		<-quit
+		shuttingDown = true
+		ln.Close()
+	}()
 
+	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if shuttingDown {
+				return
+			}
 			log.Printf("Error accepting client connection: %v\n", err)
 			continue
 		}
